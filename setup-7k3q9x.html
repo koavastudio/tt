@@ -381,8 +381,9 @@
   window.__bbttSetup = { link: link, values: function () { return values; } };
   function updateLink() { $('linkBox').value = link(); }
   (function modes() {
-    var box = $('linkModes'), opts = [['local', 'Link to the overlay file on this PC (recommended)']];
-    if (SETUP.hosted) opts.push(['online', 'Online link']);
+    var box = $('linkModes'), opts = [];
+    if (SETUP.hosted) opts.push(['online', 'Online link (use this for TikTok LIVE Studio)']);
+    if (!SETUP.hosted || location.protocol === 'file:') opts.push(['local', SETUP.hosted ? 'Link to the overlay file on this PC (OBS only)' : 'Link to the overlay file on this PC']);
     if (opts.length < 2) { box.hidden = true; return; }
     opts.forEach(function (o) {
       var l = document.createElement('label'), r = document.createElement('input');
