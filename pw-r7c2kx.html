@@ -128,28 +128,54 @@ function start(userCfg, base, GEO){
     roundRect(inset, inset, W - inset * 2, H - inset * 2, r); cx.stroke();
     cx.restore();
     // neon lights running round the border, one lap per loop
-    neonRun(() => roundRect(inset, inset, W - inset * 2, H - inset * 2, r), 2 * (W + H), t, 1, 4, lw, 0.07);
+    neonRun([inset, inset, W - inset * 2, H - inset * 2, r], t, 1, 4, lw, 0.07);
   }
-  // neon colour of the ribbon: same hue, full saturation, bright
+  // glow colour of the ribbon: same hue, saturated and light
   function neon(hex){
     const n = parseInt(hex.slice(1), 16), r = (n >> 16) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
     const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
     let h = 0;
     if (d) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
-    return d < 0.08 ? 'hsl(45,100%,70%)' : `hsl(${Math.round(h * 60 + 360) % 360},100%,62%)`;   // near-grey ribbons glow warm gold
+    return d < 0.08 ? [42, 90, 72] : [Math.round(h * 60 + 360) % 360, 92, 70];   // near-grey ribbons glow soft gold
   }
-  // `count` glowing dashes travel along a closed path; `laps` whole laps per loop keeps the loop seamless
-  function neonRun(path, per, t, laps, count, lw, frac){
-    const col = neon(S.ribbonColor), dash = per * frac, gap = per / count - dash, off = -(t / L) * per * laps;
-    cx.save();
-    cx.lineJoin = 'round'; cx.lineCap = 'round';
-    cx.setLineDash([dash, gap]); cx.lineDashOffset = off;
-    cx.globalCompositeOperation = 'lighter';
-    cx.shadowColor = col; cx.shadowBlur = 38 * m0();
-    cx.strokeStyle = col; cx.globalAlpha = 0.75; cx.lineWidth = lw * 3.6; path(); cx.stroke();   // wide glow
-    cx.shadowBlur = 12 * m0();
-    cx.globalAlpha = 1; cx.lineWidth = lw * 1.5; path(); cx.stroke();                            // neon tube
-    cx.shadowBlur = 0; cx.strokeStyle = '#fffaf2'; cx.lineWidth = lw * 0.55; path(); cx.stroke(); // hot core
+  // point at distance d along a rounded rectangle (clockwise from the top-left straight edge)
+  function rrPoint(x, y, w2, h2, r, d){
+    const sx = w2 - 2 * r, sy = h2 - 2 * r, q = Math.PI * r / 2, P = 2 * (sx + sy) + 4 * q;
+    d = ((d % P) + P) % P;
+    const segs = [[sx, (u) => [x + r + u, y]], [q, (u) => arc(x + w2 - r, y + r, -Math.PI / 2 + u / r)],
+                  [sy, (u) => [x + w2, y + r + u]], [q, (u) => arc(x + w2 - r, y + h2 - r, u / r)],
+                  [sx, (u) => [x + w2 - r - u, y + h2]], [q, (u) => arc(x + r, y + h2 - r, Math.PI / 2 + u / r)],
+                  [sy, (u) => [x, y + h2 - r - u]], [q, (u) => arc(x + r, y + r, Math.PI + u / r)]];
+    function arc(cx0, cy0, an){ return [cx0 + Math.cos(an) * r, cy0 + Math.sin(an) * r]; }
+    for (const [len, f] of segs){ if (d <= len) return f(d); d -= len; }
+    return [x + r, y];
+  }
+  // `count` comet lights travel round a rounded rectangle: bright head, soft halo, smooth fading tail.
+  // `laps` whole laps per loop keeps the loop seamless.
+  function neonRun(rect, t, laps, count, lw, frac){
+    const [x, y, w2, h2, r] = rect, q = Math.PI * r / 2, P = 2 * (w2 - 2 * r + h2 - 2 * r) + 4 * q;
+    const [hh, ss, ll] = neon(S.ribbonColor), tail = P * frac, N = Math.ceil(tail / (lw * 0.2));   // dense enough to read as one stroke
+    cx.save(); cx.globalCompositeOperation = 'lighter';
+    for (let c = 0; c < count; c++){
+      const headD = (t / L) * P * laps + c * P / count;
+      cx.fillStyle = `hsl(${hh},${ss}%,${ll}%)`;
+      for (let i = N; i >= 0; i--){                       // tail first, head last
+        const k = i / N, [px, py] = rrPoint(x, y, w2, h2, r, headD - k * tail);
+        cx.globalAlpha = (1 - k) * (1 - k) * 0.22;           // many overlapping dots add up ('lighter')
+        cx.beginPath(); cx.arc(px, py, lw * (0.8 - 0.45 * k), 0, TAU); cx.fill();
+      }
+      cx.fillStyle = '#fffaf2';                             // white-hot core along the front of the tail
+      for (let i = Math.floor(N * 0.45); i >= 0; i--){
+        const k = i / N, [px, py] = rrPoint(x, y, w2, h2, r, headD - k * tail);
+        cx.globalAlpha = (1 - k / 0.45) * 0.16;
+        cx.beginPath(); cx.arc(px, py, lw * 0.32, 0, TAU); cx.fill();
+      }
+      const [hx, hy] = rrPoint(x, y, w2, h2, r, headD), R = lw * 3.6;
+      const gr = cx.createRadialGradient(hx, hy, 0, hx, hy, R);
+      gr.addColorStop(0, `hsla(${hh},${ss}%,${ll + 12}%,.9)`); gr.addColorStop(0.35, `hsla(${hh},${ss}%,${ll}%,.35)`); gr.addColorStop(1, `hsla(${hh},${ss}%,${ll}%,0)`);
+      cx.globalAlpha = 1; cx.fillStyle = gr; cx.fillRect(hx - R, hy - R, R * 2, R * 2);
+      cx.fillStyle = '#fffaf2'; cx.beginPath(); cx.arc(hx, hy, lw * 0.42, 0, TAU); cx.fill();
+    }
     cx.restore();
   }
   function roundRect(x, y, w2, h2, r){
@@ -173,7 +199,7 @@ function start(userCfg, base, GEO){
     cx.strokeStyle = 'rgba(255,255,255,.55)'; cx.lineWidth = lw * 0.3;           // thin highlight line inside the ribbon
     roundRect(x + lw * 0.9, y + lw * 0.9, fw - lw * 1.8, fh - lw * 1.8, r * 0.8); cx.stroke();
     cx.restore();
-    neonRun(() => roundRect(x, y, fw, fh, r), 2 * (fw + fh), t, 2, 2, lw, 0.12);       // two neon lights, two laps per loop
+    neonRun([x, y, fw, fh, r], t, 2, 2, lw, 0.12);       // two neon lights, two laps per loop
     const cs = Math.min(fw, fh) * 0.42 * S.cornerSize / 100, out = cs * 0.16;      // bouquets sit slightly outside the corner
     const pieces = [
       { img: 'corner_top', px: x - out, py: y - out, flip: 1, ay: 0, ph: 0.7 },
