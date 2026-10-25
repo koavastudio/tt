@@ -5,14 +5,14 @@
 <body><script>window.CS_GEO = {"santa":{"w":1213,"h":1121,"eyes":[[367.6719160104987,366.09448818897636,15.5],[574.5,386.12335958005247,16.0]],"skin":"#fdd5b0","shoulder":[134.78,538.0]},"arm":{"w":529,"h":1135,"pivot":[279.5,1021.5]},"gifts":{"w":1095,"h":1088},"snowbank":{"w":1536,"h":277},"ext":"webp"};
 /* Cozy Santa Corner — animated kawaii Santa decoration (no events, pure loop). Engine forked from Poinsettia Wreath.
    CozySanta.start(cfg, assetBase, geo)
-   cfg keys: layout h|v|auto · santa/wave/blink/gifts/snowbank/cam/sparkles bool · santaSide left|right (horizontal) ·
+   cfg keys: layout h|v|auto · room (full-screen Christmas room background) · santa/wave/blink/gifts/snowbank/cam/sparkles bool · santaSide left|right (horizontal) ·
              santaSize % · camAspect 16:9|4:3|1:1|9:16 · camX camY % (frame centre) · camSize frame width % of screen width ·
              frameStyle candy|mint|pink|gold · amount 0..3 (snow) · speed % · loop seconds.
    Santa is a paper-doll rig: body + separate waving arm (pivot at the shoulder) + code blink over the dot eyes.
    window.__setTime(s) / window.__draw(s) for frame-exact capture. */
 (function(){
 const TAU = Math.PI * 2;
-const DEF = { layout:'auto', santa:true, wave:true, blink:true, gifts:true, snowbank:true, cam:true, sparkles:true,
+const DEF = { layout:'auto', room:false, santa:true, wave:true, blink:true, gifts:true, snowbank:true, cam:true, sparkles:true,
               santaSide:'left', santaSize:100, camAspect:'16:9', camX:74, camY:42, camSize:34, frameStyle:'candy',
               amount:2, speed:100, loop:24 };
 const FRAMES = { candy: ['#e9505c', '#fff6ec'], mint: ['#7ccfa8', '#fff6ec'], pink: ['#f29bb4', '#fff6ec'], gold: ['#e8b54a', '#fff6ec'] };
@@ -21,7 +21,7 @@ function start(userCfg, base, GEO){
   const S = Object.assign({}, DEF);
   for (const k in userCfg) if (userCfg[k] !== undefined && userCfg[k] !== '') S[k] = userCfg[k];
   ['santaSize','camX','camY','camSize','amount','speed','loop'].forEach(k => S[k] = +S[k]);
-  ['santa','wave','blink','gifts','snowbank','cam','sparkles'].forEach(k => S[k] = S[k] === true || S[k] === 'true' || S[k] === 1 || S[k] === '1');
+  ['room','santa','wave','blink','gifts','snowbank','cam','sparkles'].forEach(k => S[k] = S[k] === true || S[k] === 'true' || S[k] === 1 || S[k] === '1');
   if (!S.loop) S.loop = 24;
   const L = S.loop, spd = (S.speed || 100) / 100;
   const w = n => TAU * n / L;
@@ -32,7 +32,7 @@ function start(userCfg, base, GEO){
   const cx = cv.getContext('2d');
   let W = 0, H = 0, DPR = 1, scene = null, flakes = [], stripe = null;
 
-  const IMG = {}, names = ['santa','arm','gifts','snowbank'];
+  const IMG = {}, names = ['santa','arm','gifts','snowbank'].concat(S.room ? ['room_h','room_v'] : []);
   let loaded = 0;
   names.forEach(n => {
     const im = new Image();
@@ -217,6 +217,10 @@ function start(userCfg, base, GEO){
   function draw(t){
     cx.setTransform(DPR, 0, 0, DPR, 0, 0);
     cx.clearRect(0, 0, W, H);
+    if (S.room){                                                   // optional Christmas room, cover-fit
+      const im = IMG[scene.vertical ? 'room_v' : 'room_h'], k = Math.max(W / im.naturalWidth, H / im.naturalHeight);
+      cx.drawImage(im, (W - im.naturalWidth * k) / 2, (H - im.naturalHeight * k) / 2, im.naturalWidth * k, im.naturalHeight * k);
+    }
     if (S.amount > 0) drawSnow(t);
     if (S.cam) drawCam(t);
     if (S.snowbank){ const b = scene.bank; cx.drawImage(IMG.snowbank, -W * 0.01, b.y, b.w, b.h); }
