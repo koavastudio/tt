@@ -442,6 +442,10 @@ function start(userCfg, base, GEO){
     if (S.room && ok(scene.vertical ? 'room_v' : 'room_h')){       // optional Christmas room, cover-fit
       const im = IMG[scene.vertical ? 'room_v' : 'room_h'], k = Math.max(W / im.naturalWidth, H / im.naturalHeight);
       cx.drawImage(im, (W - im.naturalWidth * k) / 2, (H - im.naturalHeight * k) / 2, im.naturalWidth * k, im.naturalHeight * k);
+      if (S.cam){                                                  // window for the camera: the room never covers the webcam
+        const [fx, fy, fw, fh] = camRect();
+        cx.save(); cx.globalCompositeOperation = 'destination-out'; roundRect(fx, fy, fw, fh, 18 * m0()); cx.fill(); cx.restore();
+      }
     }
     if (S.amount > 0) drawSnow(t);
     if (S.cam) drawCam(t);
