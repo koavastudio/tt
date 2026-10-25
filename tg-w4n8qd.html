@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>Twinkle Garland</title>
+<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}</style></head>
+<body><script>window.GARLAND_GEO = {"swag":{"w":1536,"h":496,"line":[[0,100.5],[6,108.5],[12,103.0],[18,97.0],[24,93.5],[30,101.0],[36,112.0],[42,112.5],[48,119.0],[54,127.5],[60,130.0],[66,132.5],[72,135.5],[78,139.0],[84,144.5],[90,144.5],[96,145.5],[102,149.0],[108,154.5],[114,149.5],[120,147.0],[126,143.5],[132,151.0],[138,157.5],[144,157.5],[150,163.0],[156,170.5],[162,167.5],[168,177.5],[174,194.0],[180,194.0],[186,195.0],[192,198.5],[198,200.5],[204,206.5],[210,205.5],[216,210.0],[222,221.0],[228,217.0],[234,224.0],[240,223.5],[246,219.5],[252,241.0],[258,240.5],[264,244.5],[270,250.0],[276,257.5],[282,266.0],[288,267.5],[294,266.0],[300,256.0],[306,253.0],[312,251.5],[318,258.5],[324,262.0],[330,259.0],[336,287.5],[342,290.5],[348,287.0],[354,294.5],[360,297.0],[366,299.0],[372,298.5],[378,297.5],[384,293.0],[390,293.0],[396,299.5],[402,304.0],[408,297.0],[414,304.0],[420,313.5],[426,308.5],[432,312.5],[438,333.5],[444,327.0],[450,326.5],[456,331.5],[462,330.0],[468,342.0],[474,335.5],[480,344.5],[486,343.0],[492,340.0],[498,340.0],[504,339.5],[510,332.5],[516,353.5],[522,355.5],[528,356.5],[534,356.5],[540,357.0],[546,356.5],[552,359.0],[558,363.0],[564,369.0],[570,377.5],[576,366.5],[582,369.5],[588,370.0],[594,365.0],[600,365.0],[606,362.5],[612,356.0],[618,366.5],[624,378.0],[630,380.0],[636,376.0],[642,376.0],[648,376.0],[654,371.0],[660,368.0],[666,370.5],[672,374.5],[678,373.0],[684,374.5],[690,389.0],[696,387.0],[702,397.0],[708,396.0],[714,389.5],[720,390.0],[726,393.5],[732,394.0],[738,394.5],[744,393.0],[750,389.0],[756,395.5],[762,394.0],[768,401.5],[774,401.0],[780,402.0],[786,388.5],[792,388.5],[798,392.0],[804,392.0],[810,392.0],[816,399.5],[822,382.5],[828,376.0],[834,372.0],[840,373.5],[846,367.5],[852,367.5],[858,367.0],[864,374.0],[870,376.0],[876,379.0],[882,387.0],[888,383.5],[894,378.0],[900,379.0],[906,380.5],[912,373.5],[918,381.0],[924,375.0],[930,348.5],[936,348.5],[942,346.0],[948,346.5],[954,348.0],[960,347.0],[966,345.0],[972,343.0],[978,343.5],[984,349.0],[990,349.5],[996,353.5],[1002,349.5],[1008,349.0],[1014,356.0],[1020,346.0],[1026,346.0],[1032,344.0],[1038,342.0],[1044,342.5],[1050,342.5],[1056,338.0],[1062,332.5],[1068,337.5],[1074,331.5],[1080,313.5],[1086,311.0],[1092,318.0],[1098,309.0],[1104,313.0],[1110,305.0],[1116,309.5],[1122,306.5],[1128,302.5],[1134,305.5],[1140,301.5],[1146,308.0],[1152,291.0],[1158,297.5],[1164,289.0],[1170,282.0],[1176,278.5],[1182,283.5],[1188,281.0],[1194,276.5],[1200,277.5],[1206,267.5],[1212,261.0],[1218,259.0],[1224,253.0],[1230,250.5],[1236,246.0],[1242,246.5],[1248,249.0],[1254,253.0],[1260,240.0],[1266,236.5],[1272,237.5],[1278,238.5],[1284,242.0],[1290,237.5],[1296,236.0],[1302,232.0],[1308,230.5],[1314,224.5],[1320,197.5],[1326,195.5],[1332,190.5],[1338,186.0],[1344,192.0],[1350,191.0],[1356,191.5],[1362,189.0],[1368,169.5],[1374,167.0],[1380,158.5],[1386,155.0],[1392,157.5],[1398,153.0],[1404,159.5],[1410,165.5],[1416,166.5],[1422,159.5],[1428,159.0],[1434,158.0],[1440,148.5],[1446,144.5],[1452,133.0],[1458,126.5],[1464,129.0],[1470,131.0],[1476,137.0],[1482,133.0],[1488,122.0],[1494,121.0],[1500,105.5],[1506,92.0],[1512,104.0],[1518,96.0],[1524,105.0],[1530,98.5]],"thick":194.5,"anchorL":[0,100.5],"anchorR":[1530,98.5]},"bow":{"w":1168,"h":1167,"cx":0.4994151382074445,"cy":0.4802225867171867},"tail":{"w":431,"h":1474,"ax":217.0},"bulb":{"w":536,"h":1204},"ext":"webp"};
+/* Twinkle Garland — animated winter decoration engine (no events, pure loop).
+   TwinkleGarland.start(cfg, assetBase, geo)
+   cfg keys: layout h|v|auto · lights multi|warm|pink|ice|red · mode twinkle|chase|steady · snow 0..3 ·
+             garland/tails/bows/bulbs bool · swags (0 = auto) · tail (0 = auto, fraction of height) ·
+             scale · speed · loop (seconds, everything repeats exactly every `loop` s).
+   window.__setTime(seconds) freezes the clock (frame capture). */
+(function(){
+const PALETTES = {
+  multi: ['#ff3b4e','#ffc83d','#3fd47a','#47a8ff','#ff7ad1'],
+  warm:  ['#ffd27a','#ffc35c','#ffe3a6'],
+  pink:  ['#ff8fc6','#ffd1e6','#ffc46b'],
+  ice:   ['#a8e4ff','#e8f7ff','#7cc7ff'],
+  red:   ['#ff3b4e','#fff1e0','#3fd47a'],
+};
+const TAU = Math.PI * 2;
+const DEF = { layout:'auto', lights:'multi', mode:'twinkle', snow:2, garland:true, tails:true, bows:true, bulbs:true,
+              swags:0, tail:0, scale:1, speed:1, loop:24 };
+
+function start(userCfg, base, GEO){
+  const S = Object.assign({}, DEF);
+  for (const k in userCfg) if (userCfg[k] !== undefined && userCfg[k] !== '') S[k] = userCfg[k];
+  ['snow','swags','tail','scale','speed','loop'].forEach(k => S[k] = +S[k] || 0);
+  ['garland','tails','bows','bulbs'].forEach(k => S[k] = S[k] === true || S[k] === 'true' || S[k] === 1 || S[k] === '1');
+  if (!S.loop) S.loop = 24; if (!S.speed) S.speed = 1; if (!S.scale) S.scale = 1;
+  const pal = S.lights === 'custom'
+    ? [S.c1, S.c2, S.c3].filter(c => /^#[0-9a-f]{6}$/i.test(c || ''))
+    : PALETTES[S.lights] || PALETTES.multi;
+  if (!pal.length) pal.push(...PALETTES.multi);
+  const L = S.loop;
+  const w = n => TAU * n / L;                 // angular speed that completes n cycles per loop
+
+  let cv = document.getElementById('tg-canvas');
+  if (!cv){ cv = document.createElement('canvas'); cv.id = 'tg-canvas'; document.body.appendChild(cv); }
+  cv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none';
+  const cx = cv.getContext('2d');
+  let W = 0, H = 0, DPR = 1, scene = null, flakes = [];
+
+  const IMG = {}, names = ['swag','bow','tail','bulb'];
+  let loaded = 0;
+  names.forEach(n => {
+    const im = new Image();
+    im.crossOrigin = 'anonymous';
+    im.onload = () => { if (++loaded === names.length) { build(); requestAnimationFrame(frame); } };
+    im.src = base + n + '.' + (GEO.ext || 'png');
+    IMG[n] = im;
+  });
+
+  const bulbTint = {};
+  function tintBulb(col){
+    if (bulbTint[col]) return bulbTint[col];
+    const b = IMG.bulb, c = document.createElement('canvas');
+    c.width = b.naturalWidth; c.height = b.naturalHeight;
+    const g = c.getContext('2d');
+    g.drawImage(b, 0, 0);
+    g.globalCompositeOperation = 'multiply';          // grey glass * colour, dark cap stays dark
+    g.fillStyle = col; g.fillRect(0, 0, c.width, c.height);
+    g.globalCompositeOperation = 'destination-in';
+    g.drawImage(b, 0, 0);
+    return bulbTint[col] = c;
+  }
+
+  // deterministic random so a reload (and every capture) gives the same scene
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+  function build(){
+    seed = 7;
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    const vertical = S.layout === 'v' || (S.layout === 'auto' && H > W);
+    const sw = GEO.swag, bw = GEO.bow, tw = GEO.tail;
+    const nSw = S.swags > 0 ? Math.round(S.swags) : (vertical ? 2 : 4);
+    const span = W / nSw;
+    const k = span / (sw.anchorR[0] - sw.anchorL[0]);
+    const bowSize = span * 0.36 * S.scale;
+    const topY = -sw.anchorL[1] * k + bowSize * 0.30;   // bow loops stay on screen
+    const swags = [], bows = [], bulbs = [], tails = [];
+    const per = 5;
+    for (let i = 0; i < nSw; i++){
+      const x0 = i * span;
+      swags.push({ x: x0 - sw.anchorL[0] * k, y: topY, k, px: x0 + span / 2, n: 2 + (i % 2), ph: i * 1.7 });
+      const pts = sw.line;
+      for (let j = 1; j <= per; j++){
+        const idx = Math.min(pts.length - 1, Math.round(j / (per + 1) * (pts.length - 1)));
+        const p = pts[idx], q = pts[Math.min(pts.length - 1, idx + 2)], r = pts[Math.max(0, idx - 2)];
+        bulbs.push({ sw: i, lx: p[0], ly: p[1] + sw.thick * 0.28, ang: Math.atan2(q[1] - r[1], q[0] - r[0]),
+                     c: pal[(i * per + j) % pal.length], ph: rnd() * TAU, n: 3 + Math.floor(rnd() * 3), order: i * per + j });
+      }
+    }
+    // corner bows are replaced by the tail's own bow when tails are on
+    for (let i = S.tails ? 1 : 0; i <= (S.tails ? nSw - 1 : nSw); i++)
+      bows.push({ x: i * span, y: topY + sw.anchorL[1] * k, s: bowSize / bw.w, ph: i * 2.3 });
+    if (S.tails){
+      const len = H * (S.tail > 0 ? S.tail : (vertical ? 0.34 : 0.30));
+      const tk = len / tw.h, half = tw.w * tk / 2;
+      tails.push({ x: half + 2, y: 0, k: tk, ph: 0.4 });
+      tails.push({ x: W - half - 2, y: 0, k: tk, ph: 2.1 });
+    }
+    scene = { swags, bows, bulbs, tails, bowSize };
+    initSnow();
+  }
+
+  // ---------- snow: closed-form in time, period L ----------
+  // near flakes fall top->bottom exactly `m` times per loop; far flakes live a fraction of the loop and fade.
+  function initSnow(){
+    const n = Math.round([0, 70, 150, 280][Math.max(0, Math.min(3, S.snow | 0))] * (W * H) / (1920 * 1080));
+    flakes = [];
+    for (let i = 0; i < n; i++){
+      const z = rnd(), near = z > 0.45;
+      flakes.push({ near, x0: rnd() * W, off: rnd(), r: (1.2 + z * 3.2) * S.scale, a: 0.45 + z * 0.5,
+                    m: near ? (z > 0.8 ? 2 : 1) : 0, life: near ? 0 : 2 + Math.floor(rnd() * 3),
+                    wn: 1 + Math.floor(rnd() * 3), wp: rnd() * TAU, wd: 8 + rnd() * 18, i });
+    }
+  }
+  function hash(a, b){ const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); }
+  function drawSnow(t){
+    cx.fillStyle = '#fff';
+    const span = H + 20;
+    for (const f of flakes){
+      let x = f.x0, y, a = f.a;
+      if (f.near){
+        const p = ((t / L) * f.m + f.off) % 1;
+        y = p * span - 10;
+      } else {
+        const c = (t / L) * f.life + f.off, cyc = Math.floor(c) % f.life, p = c - Math.floor(c);
+        x = hash(f.i, cyc) * W;
+        const y0 = hash(cyc, f.i) * H * 0.9 - H * 0.1;
+        y = y0 + p * H * 0.35;
+        a *= Math.min(1, p * 5, (1 - p) * 5);
+      }
+      x += Math.sin(w(f.wn) * t + f.wp) * f.wd;
+      cx.globalAlpha = a;
+      cx.beginPath(); cx.arc(x, y, f.r, 0, TAU); cx.fill();
+    }
+    cx.globalAlpha = 1;
+  }
+
+  function bulbLevel(b, t){
+    if (S.mode === 'steady') return 1;
+    if (S.mode === 'chase'){
+      const n = pal.length, steps = Math.max(1, Math.round(2.2 * L / n)) * n;   // whole cycles per loop
+      return (b.order % n) === (Math.floor(t / L * steps) % n) ? 1 : 0.35;
+    }
+    const s = 0.5 + 0.5 * Math.sin(w(b.n) * t + b.ph);
+    return 0.45 + 0.55 * s * s;
+  }
+
+  let frozen = null;
+  window.__setTime = s => { frozen = s; };
+  window.__ready = () => loaded === names.length && !!scene;
+  function frame(now){
+    draw((frozen !== null ? frozen : now / 1000 * S.speed) % L);
+    requestAnimationFrame(frame);
+  }
+  window.__draw = s => draw(s % L);
+
+  function draw(t){
+    cx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    cx.clearRect(0, 0, W, H);
+    const sw = GEO.swag;
+    for (const s of scene.swags){
+      const a = Math.sin(w(s.n) * t + s.ph) * 0.012, ay = s.y + sw.anchorL[1] * s.k;
+      cx.save(); cx.translate(s.px, ay); cx.rotate(a); cx.translate(-s.px, -ay);
+      if (S.garland) cx.drawImage(IMG.swag, s.x, s.y, sw.w * s.k, sw.h * s.k);
+      if (S.bulbs) drawBulbs(s, t);
+      cx.restore();
+    }
+    if (S.tails) for (const tl of scene.tails){
+      cx.save(); cx.translate(tl.x, tl.y); cx.rotate(Math.sin(w(2) * t + tl.ph) * 0.02);
+      cx.drawImage(IMG.tail, -GEO.tail.ax * tl.k, 0, GEO.tail.w * tl.k, GEO.tail.h * tl.k);
+      cx.restore();
+    }
+    if (S.bows) for (const b of scene.bows){
+      const bw = GEO.bow.w * b.s, bh = GEO.bow.h * b.s;
+      cx.save(); cx.translate(b.x, b.y); cx.rotate(Math.sin(w(3) * t + b.ph) * 0.03);
+      cx.drawImage(IMG.bow, -bw * GEO.bow.cx, -bh * 0.36, bw, bh);   // knot on the anchor, loops hang below
+      cx.restore();
+    }
+    if (S.snow > 0) drawSnow(t);
+  }
+
+  function drawBulbs(s, t){
+    const bulbW = scene.bowSize * 0.17, B = GEO.bulb, bh = bulbW * B.h / B.w;
+    const idx = scene.swags.indexOf(s);
+    for (const b of scene.bulbs){
+      if (b.sw !== idx) continue;
+      const x = s.x + b.lx * s.k, y = s.y + b.ly * s.k, lv = bulbLevel(b, t);
+      cx.save();
+      cx.globalCompositeOperation = 'lighter';
+      const gr = bulbW * 1.7, gy = y + bh * 0.55;
+      const g = cx.createRadialGradient(x, gy, 0, x, gy, gr);
+      g.addColorStop(0, hexA(b.c, 0.55 * lv)); g.addColorStop(1, hexA(b.c, 0));
+      cx.fillStyle = g; cx.fillRect(x - gr, gy - gr, gr * 2, gr * 2);
+      cx.restore();
+      cx.save(); cx.translate(x, y); cx.rotate(b.ang * 0.6 + Math.sin(w(2) * t + b.ph) * 0.05);
+      cx.drawImage(tintBulb(b.c), -bulbW / 2, 0, bulbW, bh);
+      cx.globalCompositeOperation = 'lighter';
+      cx.globalAlpha = 0.65 * lv;
+      const cg = cx.createRadialGradient(0, bh * 0.62, 0, 0, bh * 0.62, bulbW * 0.42);
+      cg.addColorStop(0, 'rgba(255,255,240,1)'); cg.addColorStop(1, 'rgba(255,255,240,0)');
+      cx.fillStyle = cg; cx.fillRect(-bulbW, 0, bulbW * 2, bh * 1.2);
+      cx.restore();
+    }
+  }
+  function hexA(h, a){
+    const n = parseInt(h.slice(1), 16);
+    return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
+  }
+  window.addEventListener('resize', () => { if (loaded === names.length) build(); });
+}
+window.TwinkleGarland = { start, PALETTES };
+})();
+
+(function(){
+  var Q = new URLSearchParams(location.search), cfg = {};
+  Q.forEach(function(v, k){ cfg[k] = v === 'true' ? true : v === 'false' ? false : v; });
+  if (cfg.speed) cfg.speed = cfg.speed / 100; if (cfg.scale) cfg.scale = cfg.scale / 100; if (cfg.tail) cfg.tail = cfg.tail / 100;
+  if (Q.get('bg')) document.body.style.background = '#' + Q.get('bg').replace('#', '');
+  TwinkleGarland.start(cfg, 'tg-w4n8qd/', window.GARLAND_GEO);
+})();
+</script></body></html>
