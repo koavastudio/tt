@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>Poinsettia Wreath</title>
+<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}</style></head>
+<body><script>window.PW_GEO = {"corner_top":{"w":1226,"h":1231},"corner_bottom":{"w":1231,"h":1080},"wreath":{"w":1186,"h":1208,"hole":0.1842327150084317},"arch":{"w":1536,"h":385},"flower":{"w":1194,"h":1115},"ext":"webp"};
+/* Poinsettia Wreath — animated winter flower frame (no events, pure loop). Engine forked from Twinkle Garland.
+   PoinsettiaWreath.start(cfg, assetBase, geo)
+   cfg keys: layout h|v|auto · corners/arch/ribbon/cam bool · bottom bool (bottom corners) ·
+             cornerSize % · camX camY % of screen (centre) · camSize % of height ·
+             ribbon (color hex) · fall none|snow|petals|both · amount 0..3 · sparkles bool ·
+             speed % · loop seconds (everything repeats exactly every `loop` s).
+   window.__setTime(s) / window.__draw(s) for frame-exact capture. */
+(function(){
+const TAU = Math.PI * 2;
+const DEF = { layout:'auto', corners:true, bottom:true, arch:true, ribbon:true, ribbonColor:'#e8a9b8', cam:true,
+              cornerSize:100, camX:84, camY:70, camSize:42, fall:'both', amount:2, sparkles:true, speed:100, loop:24 };
+
+function start(userCfg, base, GEO){
+  const S = Object.assign({}, DEF);
+  for (const k in userCfg) if (userCfg[k] !== undefined && userCfg[k] !== '') S[k] = userCfg[k];
+  ['cornerSize','camX','camY','camSize','amount','speed','loop'].forEach(k => S[k] = +S[k]);
+  ['corners','bottom','arch','ribbon','cam','sparkles'].forEach(k => S[k] = S[k] === true || S[k] === 'true' || S[k] === 1 || S[k] === '1');
+  if (!S.loop) S.loop = 24;
+  const L = S.loop, spd = (S.speed || 100) / 100;
+  const w = n => TAU * n / L;                       // n whole cycles per loop
+
+  let cv = document.getElementById('pw-canvas');
+  if (!cv){ cv = document.createElement('canvas'); cv.id = 'pw-canvas'; document.body.appendChild(cv); }
+  cv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none';
+  const cx = cv.getContext('2d');
+  let W = 0, H = 0, DPR = 1, scene = null, flakes = [];
+
+  const IMG = {}, names = ['corner_top','corner_bottom','wreath','arch','flower'];
+  let loaded = 0;
+  names.forEach(n => {
+    const im = new Image();
+    im.crossOrigin = 'anonymous';
+    im.onload = () => { if (++loaded === names.length) { build(); requestAnimationFrame(frame); } };
+    im.src = base + n + '.' + (GEO.ext || 'png');
+    IMG[n] = im;
+  });
+
+  let seed = 11;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+  function build(){
+    seed = 11;
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    const vertical = S.layout === 'v' || (S.layout === 'auto' && H > W);
+    const m = Math.min(W, H), k = S.cornerSize / 100;
+    const corners = [];
+    // top corners: horizontal = both, vertical = only when the arch is off (the arch already covers the top)
+    const topSize = m * (vertical ? 0.62 : 0.42) * k, botSize = m * (vertical ? 0.42 : 0.30) * k;
+    if (!vertical || !S.arch){
+      corners.push({ img:'corner_top', x:0, y:0, s:topSize, flip:1, ay:0, ph:0.3, n:2 });
+      corners.push({ img:'corner_top', x:W, y:0, s:topSize, flip:-1, ay:0, ph:1.9, n:2 });
+    }
+    if (S.bottom){
+      // vertical: bottom-left is the TikTok comment area -> only bottom-right
+      if (!vertical) corners.push({ img:'corner_bottom', x:0, y:H, s:botSize, flip:1, ay:1, ph:2.6, n:3 });
+      corners.push({ img:'corner_bottom', x:W, y:H, s:botSize, flip:-1, ay:1, ph:0.9, n:3 });
+    }
+    const archH = vertical ? W * GEO.arch.h / GEO.arch.w * 1.04 * k : 0;
+    scene = { vertical, corners, archH, topSize, botSize };
+    initFall();
+  }
+
+  // ---------- falling snow / petals: closed form in time, period L ----------
+  function initFall(){
+    const n = Math.round([0, 40, 90, 170][Math.max(0, Math.min(3, S.amount | 0))] * (W * H) / (1920 * 1080));
+    flakes = [];
+    if (S.fall === 'none') return;
+    for (let i = 0; i < n; i++){
+      const z = rnd();
+      let kind = S.fall === 'both' ? (rnd() < 0.2 ? 'petal' : 'snow') : S.fall === 'petals' ? 'petal' : 'snow';
+      flakes.push({ kind, x0: rnd() * W, off: rnd(), z, m: kind === 'petal' ? 1 : (z > 0.7 ? 2 : 1),
+                    r: (kind === 'petal' ? 13 + z * 16 : 1.4 + z * 3) * Math.min(1.4, m0()), a: 0.5 + z * 0.5,
+                    wn: 1 + Math.floor(rnd() * 3), wp: rnd() * TAU, wd: 10 + rnd() * 26, rn: 1 + Math.floor(rnd() * 3), rp: rnd() * TAU });
+    }
+  }
+  function m0(){ return Math.min(W, H) / 1080; }
+  function drawFall(t){
+    const span = H + 60;
+    for (const f of flakes){
+      const p = ((t / L) * f.m + f.off) % 1, y = p * span - 30;
+      const x = f.x0 + Math.sin(w(f.wn) * t + f.wp) * f.wd;
+      if (f.kind === 'snow'){
+        cx.globalAlpha = f.a; cx.fillStyle = '#fff';
+        cx.beginPath(); cx.arc(x, y, f.r, 0, TAU); cx.fill();
+      } else {
+        const fw = f.r * 2, fh = fw * GEO.flower.h / GEO.flower.w;
+        cx.save(); cx.globalAlpha = Math.min(1, f.a + 0.2); cx.translate(x, y);
+        cx.rotate(w(f.rn) * t + f.rp);
+        cx.drawImage(IMG.flower, -fw / 2, -fh / 2, fw, fh);
+        cx.restore();
+      }
+    }
+    cx.globalAlpha = 1;
+  }
+
+  // ---------- sparkles: 4-point stars that fade in/out over the flowers ----------
+  function sparkle(x, y, r, a){
+    cx.save(); cx.globalAlpha = a; cx.translate(x, y); cx.fillStyle = '#fff8e6';
+    cx.beginPath();
+    for (let i = 0; i < 4; i++){ const an = i * TAU / 4; cx.lineTo(Math.cos(an) * r, Math.sin(an) * r); cx.lineTo(Math.cos(an + TAU / 8) * r * 0.22, Math.sin(an + TAU / 8) * r * 0.22); }
+    cx.closePath(); cx.fill(); cx.restore();
+  }
+  function sparklesIn(box, t, count, salt){
+    for (let i = 0; i < count; i++){
+      const n = 2 + (i % 3), c = (t / L) * n + i * 0.37 + salt, cyc = Math.floor(c) % n, p = c - Math.floor(c);
+      const hx = hash(i + salt * 7, cyc), hy = hash(cyc + 3, i + salt);
+      const a = Math.sin(Math.min(1, p * 3) * Math.PI);          // quick twinkle, then rest
+      if (a <= 0.01) continue;
+      sparkle(box.x + hx * box.w, box.y + hy * box.h, (8 + hash(i, salt) * 10) * m0() * 1.4, a);
+    }
+  }
+  function hash(a, b){ const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); }
+
+  // ---------- ribbon border (code-drawn, follows the screen edge between the corner pieces) ----------
+  function drawRibbon(t){
+    const inset = 14 * m0(), lw = 7 * m0();
+    cx.save();
+    cx.lineWidth = lw; cx.strokeStyle = S.ribbonColor; cx.lineJoin = 'round';
+    cx.globalAlpha = 0.95;
+    const r = 26 * m0();
+    roundRect(inset, inset, W - inset * 2, H - inset * 2, r); cx.stroke();
+    // shimmer: a light dash running round the border, one lap per loop
+    cx.strokeStyle = 'rgba(255,255,255,.75)'; cx.lineWidth = lw * 0.45;
+    const per = 2 * (W + H), dash = per * 0.06;
+    cx.setLineDash([dash, per - dash]); cx.lineDashOffset = -(t / L) * per;
+    roundRect(inset, inset, W - inset * 2, H - inset * 2, r); cx.stroke();
+    cx.restore();
+  }
+  function roundRect(x, y, w2, h2, r){
+    cx.beginPath(); cx.moveTo(x + r, y); cx.arcTo(x + w2, y, x + w2, y + h2, r); cx.arcTo(x + w2, y + h2, x, y + h2, r);
+    cx.arcTo(x, y + h2, x, y, r); cx.arcTo(x, y, x + w2, y, r); cx.closePath();
+  }
+
+  let frozen = null;
+  window.__setTime = s => { frozen = s; };
+  window.__ready = () => loaded === names.length && !!scene;
+  window.__draw = s => draw(((s % L) + L) % L);
+  function frame(now){
+    draw(((frozen !== null ? frozen : now / 1000 * spd) % L + L) % L);
+    requestAnimationFrame(frame);
+  }
+
+  function draw(t){
+    cx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    cx.clearRect(0, 0, W, H);
+    if (S.ribbon) drawRibbon(t);
+    if (S.fall !== 'none') drawFall(t);
+
+    if (S.corners) for (const c of scene.corners){
+      const g = GEO[c.img], s = c.s / Math.max(g.w, g.h), dw = g.w * s, dh = g.h * s;
+      cx.save(); cx.translate(c.x, c.y); cx.scale(c.flip, 1);
+      cx.rotate(Math.sin(w(c.n) * t + c.ph) * 0.012 * (c.ay ? -1 : 1));   // sway around the screen corner
+      cx.drawImage(IMG[c.img], 0, c.ay ? -dh : 0, dw, dh);
+      cx.restore();
+      if (S.sparkles) sparklesIn({ x: c.flip > 0 ? c.x : c.x - dw, y: c.ay ? c.y - dh : 0, w: dw * 0.7, h: dh * 0.7 }, t, 3, c.ph * 5);
+    }
+
+    if (scene.vertical && S.arch){
+      const g = GEO.arch, aw = W * 1.04 * S.cornerSize / 100 > W * 1.3 ? W * 1.3 : W * 1.04 * S.cornerSize / 100, ah = aw * g.h / g.w;
+      cx.save(); cx.translate(W / 2, 0); cx.rotate(Math.sin(w(2) * t + 0.5) * 0.008);
+      cx.drawImage(IMG.arch, -aw / 2, -ah * 0.02, aw, ah);
+      cx.restore();
+      if (S.sparkles) sparklesIn({ x: W * 0.1, y: 0, w: W * 0.8, h: ah * 0.6 }, t, 6, 9);
+    }
+
+    if (S.cam){
+      // size from the short side so 16:9 and 9:16 look alike; centre clamped so the wreath stays on screen
+      const g = GEO.wreath, size = Math.min(W, H) * S.camSize / 100;
+      const x = Math.max(size / 2, Math.min(W - size / 2, W * S.camX / 100));
+      const y = Math.max(size / 2, Math.min(H - size / 2, H * S.camY / 100));
+      cx.save(); cx.translate(x, y); cx.rotate(Math.sin(w(2) * t + 1.2) * 0.02);
+      cx.drawImage(IMG.wreath, -size / 2, -size / 2 * g.h / g.w, size, size * g.h / g.w);
+      cx.restore();
+      if (S.sparkles) sparklesIn({ x: x - size / 2, y: y - size / 2, w: size, h: size }, t, 4, 21);
+    }
+  }
+  window.addEventListener('resize', () => { if (loaded === names.length) build(); });
+}
+window.PoinsettiaWreath = { start, DEF };
+})();
+
+(function(){
+  var Q = new URLSearchParams(location.search), cfg = {};
+  Q.forEach(function(v, k){ cfg[k] = v === 'true' ? true : v === 'false' ? false : v; });
+  if (Q.get('bg')) document.body.style.background = '#' + Q.get('bg').replace('#', '');
+  PoinsettiaWreath.start(cfg, 'pw-r7c2kx/', window.PW_GEO);
+})();
+</script></body></html>
