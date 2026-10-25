@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>Cozy Santa Corner</title>
+<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}</style></head>
+<body><script>window.CS_GEO = {"santa":{"w":1213,"h":1121,"eyes":[[367.6719160104987,366.09448818897636,15.5],[574.5,386.12335958005247,16.0]],"skin":"#fdd5b0","shoulder":[134.78,538.0]},"arm":{"w":529,"h":1135,"pivot":[279.5,1021.5]},"gifts":{"w":1095,"h":1088},"snowbank":{"w":1536,"h":277},"ext":"webp"};
+/* Cozy Santa Corner — animated kawaii Santa decoration (no events, pure loop). Engine forked from Poinsettia Wreath.
+   CozySanta.start(cfg, assetBase, geo)
+   cfg keys: layout h|v|auto · santa/wave/blink/gifts/snowbank/cam/sparkles bool · santaSide left|right (horizontal) ·
+             santaSize % · camAspect 16:9|4:3|1:1|9:16 · camX camY % (frame centre) · camSize frame width % of screen width ·
+             frameStyle candy|mint|pink|gold · amount 0..3 (snow) · speed % · loop seconds.
+   Santa is a paper-doll rig: body + separate waving arm (pivot at the shoulder) + code blink over the dot eyes.
+   window.__setTime(s) / window.__draw(s) for frame-exact capture. */
+(function(){
+const TAU = Math.PI * 2;
+const DEF = { layout:'auto', santa:true, wave:true, blink:true, gifts:true, snowbank:true, cam:true, sparkles:true,
+              santaSide:'left', santaSize:100, camAspect:'16:9', camX:74, camY:42, camSize:34, frameStyle:'candy',
+              amount:2, speed:100, loop:24 };
+const FRAMES = { candy: ['#e9505c', '#fff6ec'], mint: ['#7ccfa8', '#fff6ec'], pink: ['#f29bb4', '#fff6ec'], gold: ['#e8b54a', '#fff6ec'] };
+
+function start(userCfg, base, GEO){
+  const S = Object.assign({}, DEF);
+  for (const k in userCfg) if (userCfg[k] !== undefined && userCfg[k] !== '') S[k] = userCfg[k];
+  ['santaSize','camX','camY','camSize','amount','speed','loop'].forEach(k => S[k] = +S[k]);
+  ['santa','wave','blink','gifts','snowbank','cam','sparkles'].forEach(k => S[k] = S[k] === true || S[k] === 'true' || S[k] === 1 || S[k] === '1');
+  if (!S.loop) S.loop = 24;
+  const L = S.loop, spd = (S.speed || 100) / 100;
+  const w = n => TAU * n / L;
+
+  let cv = document.getElementById('cs-canvas');
+  if (!cv){ cv = document.createElement('canvas'); cv.id = 'cs-canvas'; document.body.appendChild(cv); }
+  cv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none';
+  const cx = cv.getContext('2d');
+  let W = 0, H = 0, DPR = 1, scene = null, flakes = [], stripe = null;
+
+  const IMG = {}, names = ['santa','arm','gifts','snowbank'];
+  let loaded = 0;
+  names.forEach(n => {
+    const im = new Image();
+    im.crossOrigin = 'anonymous';
+    im.onload = () => { if (++loaded === names.length) { build(); requestAnimationFrame(frame); } };
+    im.src = base + n + '.' + (GEO.ext || 'png');
+    IMG[n] = im;
+  });
+
+  let seed = 13;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const m0 = () => Math.min(W, H) / 1080;
+
+  function build(){
+    seed = 13;
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    const vertical = S.layout === 'v' || (S.layout === 'auto' && H > W);
+    const k = S.santaSize / 100, m = Math.min(W, H);
+    // horizontal: Santa in the chosen bottom corner, gifts in the other; vertical: Santa bottom-right
+    // (bottom-left is the TikTok comment area), gifts small in the top-left
+    const right = vertical || S.santaSide === 'right';
+    const sH = m * (vertical ? 0.36 : 0.40) * k, sW = sH * GEO.santa.w / GEO.santa.h;
+    const pad = m * 0.02 + sW * 0.14;                              // room for the waving arm beside the body
+    const santa = { w: sW, h: sH, x: right ? W - sW - pad : pad, y: H - sH - m * 0.015, flip: right ? -1 : 1 };
+    const gH = m * (vertical ? 0.17 : 0.26) * k, gW = gH * GEO.gifts.w / GEO.gifts.h;
+    const gifts = vertical ? { w: gW, h: gH, x: m * 0.04, y: m * 0.05 }
+                           : { w: gW, h: gH, x: right ? m * 0.03 : W - gW - m * 0.03, y: H - gH - m * 0.03 };
+    const bW = W * 1.02, bH = bW * GEO.snowbank.h / GEO.snowbank.w;
+    scene = { vertical, santa, gifts, bank: { w: bW, h: Math.min(bH, H * 0.16), y: H - Math.min(bH, H * 0.16) } };
+    stripe = makeStripe();
+    initSnow();
+  }
+
+  // ---------- snow (closed form, period L) ----------
+  function initSnow(){
+    const n = Math.round([0, 70, 150, 280][Math.max(0, Math.min(3, S.amount | 0))] * (W * H) / (1920 * 1080));
+    flakes = [];
+    for (let i = 0; i < n; i++){
+      const z = rnd();
+      flakes.push({ x0: rnd() * W, off: rnd(), m: z > 0.7 ? 2 : 1, r: (1.4 + z * 3.2) * m0(), a: 0.5 + z * 0.5,
+                    wn: 1 + Math.floor(rnd() * 3), wp: rnd() * TAU, wd: 8 + rnd() * 20 });
+    }
+  }
+  function drawSnow(t){
+    cx.fillStyle = '#fff';
+    for (const f of flakes){
+      const y = ((t / L) * f.m + f.off) % 1 * (H + 20) - 10, x = f.x0 + Math.sin(w(f.wn) * t + f.wp) * f.wd;
+      cx.globalAlpha = f.a; cx.beginPath(); cx.arc(x, y, f.r, 0, TAU); cx.fill();
+    }
+    cx.globalAlpha = 1;
+  }
+
+  // ---------- sparkles ----------
+  function hash(a, b){ const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); }
+  function sparkle(x, y, r, a){
+    cx.save(); cx.globalAlpha = a; cx.translate(x, y); cx.fillStyle = '#fff8e6'; cx.beginPath();
+    for (let i = 0; i < 4; i++){ const an = i * TAU / 4; cx.lineTo(Math.cos(an) * r, Math.sin(an) * r); cx.lineTo(Math.cos(an + TAU / 8) * r * 0.22, Math.sin(an + TAU / 8) * r * 0.22); }
+    cx.closePath(); cx.fill(); cx.restore();
+  }
+  function sparklesIn(box, t, count, salt){
+    for (let i = 0; i < count; i++){
+      const n = 2 + (i % 3), c = (t / L) * n + i * 0.37 + salt, cyc = Math.floor(c) % n, p = c - Math.floor(c);
+      const a = Math.sin(Math.min(1, p * 3) * Math.PI);
+      if (a <= 0.01) continue;
+      sparkle(box.x + hash(i + salt * 7, cyc) * box.w, box.y + hash(cyc + 3, i + salt) * box.h, (8 + hash(i, salt) * 10) * m0() * 1.4, a);
+    }
+  }
+
+  // ---------- Santa rig ----------
+  function waveAngle(t){
+    // two waving bursts per loop: 3 quick swings, then a gentle sway at rest
+    const p = ((t / L) * 2) % 1;
+    const burst = p < 0.3 ? Math.sin(p / 0.3 * Math.PI * 3) * 0.32 * Math.sin(p / 0.3 * Math.PI) : 0;
+    return -0.18 + burst + Math.sin(w(4) * t) * 0.04;
+  }
+  function blinkAmount(t){
+    // three blinks per loop, each ~0.18 s; returns 0 (open) .. 1 (closed)
+    let best = 0;
+    for (const at of [0.17, 0.52, 0.81]){
+      const d = Math.abs(t / L - at) * L;
+      if (d < 0.09) best = Math.max(best, 1 - d / 0.09);
+    }
+    return best;
+  }
+  function drawSanta(t){
+    const s = scene.santa, g = GEO.santa, k = s.w / g.w;
+    const bob = Math.sin(w(6) * t) * 3 * m0();                       // breathing bob, no stretching
+    cx.save();
+    cx.translate(s.flip > 0 ? s.x : s.x + s.w, s.y + bob); cx.scale(s.flip * k, k);
+    cx.drawImage(IMG.santa, 0, 0, g.w, g.h);                      // geometry units (the WebP is downscaled)
+    if (S.blink){
+      const b = blinkAmount(t);
+      if (b > 0.35) for (const [ex, ey, er] of g.eyes){
+        cx.fillStyle = g.skin; cx.beginPath(); cx.ellipse(ex, ey, er * 1.45, er * 1.5, 0, 0, TAU); cx.fill();
+        cx.strokeStyle = '#3b2016'; cx.lineWidth = er * 0.55; cx.lineCap = 'round';
+        cx.beginPath(); cx.arc(ex, ey - er * 0.6, er * 1.05, 0.2 * Math.PI, 0.8 * Math.PI); cx.stroke();   // happy closed eye ^
+      }
+    }
+    if (S.wave){
+      const a = GEO.arm, [px, py] = a.pivot, [shx, shy] = g.shoulder;
+      const as = g.h * 0.42 / a.h;                                     // arm length ~42 % of Santa's height
+      cx.save(); cx.translate(shx, shy); cx.rotate(waveAngle(t)); cx.scale(as, as);
+      cx.drawImage(IMG.arm, -px, -py, a.w, a.h);
+      cx.restore();
+    }
+    cx.restore();
+    if (S.sparkles) sparklesIn({ x: s.x, y: s.y, w: s.w, h: s.h * 0.5 }, t, 3, 4);
+  }
+
+  // ---------- camera frame: candy-cane stripes + running light trails ----------
+  const ASPECT = { '16:9': 16 / 9, '4:3': 4 / 3, '1:1': 1, '9:16': 9 / 16 };
+  function makeStripe(){
+    const [a, b] = FRAMES[S.frameStyle] || FRAMES.candy, n = Math.max(8, Math.round(16 * m0()));
+    const c = document.createElement('canvas'); c.width = c.height = n * 2;
+    const g = c.getContext('2d');
+    g.fillStyle = b; g.fillRect(0, 0, n * 2, n * 2);
+    g.fillStyle = a;
+    for (let i = -2; i < 4; i++){ g.beginPath(); g.moveTo(i * n, 0); g.lineTo(i * n + n, 0); g.lineTo(i * n + n * 3, n * 2); g.lineTo(i * n + n * 2, n * 2); g.closePath(); g.fill(); }
+    return cx.createPattern(c, 'repeat');
+  }
+  function roundRect(x, y, w2, h2, r){
+    cx.beginPath(); cx.moveTo(x + r, y); cx.arcTo(x + w2, y, x + w2, y + h2, r); cx.arcTo(x + w2, y + h2, x, y + h2, r);
+    cx.arcTo(x, y + h2, x, y, r); cx.arcTo(x, y, x + w2, y, r); cx.closePath();
+  }
+  function rrPoint(x, y, w2, h2, r, d){
+    const sx = w2 - 2 * r, sy = h2 - 2 * r, q = Math.PI * r / 2, P = 2 * (sx + sy) + 4 * q;
+    d = ((d % P) + P) % P;
+    const arc = (c0, c1, an) => [c0 + Math.cos(an) * r, c1 + Math.sin(an) * r];
+    const segs = [[sx, u => [x + r + u, y]], [q, u => arc(x + w2 - r, y + r, -Math.PI / 2 + u / r)],
+                  [sy, u => [x + w2, y + r + u]], [q, u => arc(x + w2 - r, y + h2 - r, u / r)],
+                  [sx, u => [x + w2 - r - u, y + h2]], [q, u => arc(x + r, y + h2 - r, Math.PI / 2 + u / r)],
+                  [sy, u => [x, y + h2 - r - u]], [q, u => arc(x + r, y + r, Math.PI + u / r)]];
+    for (const [len, f] of segs){ if (d <= len) return f(d); d -= len; }
+    return [x + r, y];
+  }
+  function lightTrails(rect, t, laps, count, lw, frac){
+    const [x, y, w2, h2, r] = rect, P = 2 * (w2 - 2 * r + h2 - 2 * r) + 2 * Math.PI * r;
+    const tail = P * frac, N = Math.ceil(tail / (lw * 0.2));
+    cx.save(); cx.globalCompositeOperation = 'lighter';
+    for (let c = 0; c < count; c++){
+      const head = (t / L) * P * laps + c * P / count;
+      cx.fillStyle = '#fff3c4';
+      for (let i = N; i >= 0; i--){
+        const kk = i / N, [px, py] = rrPoint(x, y, w2, h2, r, head - kk * tail);
+        cx.globalAlpha = (1 - kk) * (1 - kk) * 0.2;
+        cx.beginPath(); cx.arc(px, py, lw * (0.7 - 0.4 * kk), 0, TAU); cx.fill();
+      }
+      const [hx, hy] = rrPoint(x, y, w2, h2, r, head), R = lw * 3.4;
+      const gr = cx.createRadialGradient(hx, hy, 0, hx, hy, R);
+      gr.addColorStop(0, 'rgba(255,248,220,.95)'); gr.addColorStop(0.35, 'rgba(255,230,160,.35)'); gr.addColorStop(1, 'rgba(255,230,160,0)');
+      cx.globalAlpha = 1; cx.fillStyle = gr; cx.fillRect(hx - R, hy - R, R * 2, R * 2);
+    }
+    cx.restore();
+  }
+  function drawCam(t){
+    const ar = ASPECT[S.camAspect] || 16 / 9;
+    let fw = W * S.camSize / 100 * (scene.vertical ? 1.9 : 1), fh = fw / ar;   // same setting reads alike in 9:16
+    if (fh > H * 0.9){ fh = H * 0.9; fw = fh * ar; }
+    const x = Math.max(fw / 2, Math.min(W - fw / 2, W * S.camX / 100)) - fw / 2;
+    const y = Math.max(fh / 2, Math.min(H - fh / 2, H * S.camY / 100)) - fh / 2;
+    const lw = 9 * m0(), r = 18 * m0();
+    cx.save();
+    cx.lineJoin = 'round';
+    cx.strokeStyle = '#5a2f22'; cx.lineWidth = lw + 4 * m0(); roundRect(x, y, fw, fh, r); cx.stroke();   // cocoa outline, like the art
+    cx.strokeStyle = stripe; cx.lineWidth = lw; roundRect(x, y, fw, fh, r); cx.stroke();
+    cx.restore();
+    lightTrails([x, y, fw, fh, r], t, 2, 2, lw * 0.7, 0.12);
+    if (S.sparkles) sparklesIn({ x, y, w: fw, h: fh * 0.2 }, t, 2, 21);
+  }
+
+  let frozen = null;
+  window.__setTime = s => { frozen = s; };
+  window.__ready = () => loaded === names.length && !!scene;
+  window.__draw = s => draw(((s % L) + L) % L);
+  function frame(now){
+    draw(((frozen !== null ? frozen : now / 1000 * spd) % L + L) % L);
+    requestAnimationFrame(frame);
+  }
+
+  function draw(t){
+    cx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    cx.clearRect(0, 0, W, H);
+    if (S.amount > 0) drawSnow(t);
+    if (S.cam) drawCam(t);
+    if (S.snowbank){ const b = scene.bank; cx.drawImage(IMG.snowbank, -W * 0.01, b.y, b.w, b.h); }
+    if (S.gifts){
+      const g = scene.gifts;
+      cx.save(); cx.translate(g.x + g.w / 2, g.y + g.h); cx.rotate(Math.sin(w(2) * t + 1) * 0.012);
+      cx.drawImage(IMG.gifts, -g.w / 2, -g.h, g.w, g.h); cx.restore();
+      if (S.sparkles) sparklesIn({ x: g.x, y: g.y, w: g.w, h: g.h * 0.6 }, t, 2, 9);
+    }
+    if (S.santa) drawSanta(t);
+  }
+  window.addEventListener('resize', () => { if (loaded === names.length) build(); });
+}
+window.CozySanta = { start, DEF };
+})();
+
+(function(){
+  var Q = new URLSearchParams(location.search), cfg = {};
+  Q.forEach(function(v, k){ cfg[k] = v === 'true' ? true : v === 'false' ? false : v; });
+  if (Q.get('bg')) document.body.style.background = '#' + Q.get('bg').replace('#', '');
+  CozySanta.start(cfg, 'cs-k3m8vb/', window.CS_GEO);
+})();
+</script></body></html>
