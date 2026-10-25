@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>Stocking Kitty</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}</style></head>
+<body><script>window.SK_GEO = {"stocking":{"w":920,"h":1492,"cuff":[84.0,222.0,662.0],"lip":302.0},"kitten":{"w":1065,"h":1063,"base":859.0,"bx":531.5},"happy":{"w":1238,"h":987,"base":925.0,"bx":618.5},"mantel":{"w":1510,"h":605,"flames":[[0.2009302240285715,0.09154587506329223],[0.31329943396141585,0.21656820005273994]]},"yarn":{"w":1095,"h":963},"ornament":{"w":916,"h":1113},"pompom":{"w":1119,"h":1163},"ext":"webp"};
+/* Stocking Kitty — kawaii kitten-in-a-stocking decoration + StreamElements alert widget. Engine forked from Cozy Santa Corner.
+   const api = StockingKitty.start(cfg, assetBase, geo)  ->  api.fire({ kind, name, amount, message, reward })
+   Decoration (also on the plain OBS / TikTok link): a stocking hangs from a little mantel shelf, the kitten peeks out and
+   rests its paws on the cuff, candles flicker, knitted camera frame with pom-poms and light trails, snow, sparkles,
+   optional full-screen room. Alerts (StreamElements only): the kitten pops up overjoyed, a yarn ball and an ornament bounce
+   out of the stocking, a gift tag swings down on a ribbon with the viewer's name.
+   window.__setTime(abs s) / __draw(abs s) / __fire(ev) for frame-exact capture. */
+(function(){
+const TAU = Math.PI * 2;
+const DEF = { layout:'auto', room:false, kitten:true, mantel:true, cam:true, sparkles:true, frameDeco:true,
+              side:'left', size:100, camAspect:'16:9', camX:72, camY:40, camSize:36, frameStyle:'candy',
+              amount:2, speed:100, loop:24, tagX:40, tagY:30, cardTime:5, showMsg:true, currency:'$',
+              lblFollow:'New follower', lblSub:'New subscriber', lblGift:'Gift subs', lblTip:'Tip', lblCheer:'Bits',
+              lblRaid:'Raid', lblPoints:'Channel points',
+              lineFollow:'thanks for the follow!', lineSub:'just subscribed!', lineGift:'gifted {amount} subs!',
+              lineTip:'tipped {amount}!', lineCheer:'cheered {amount} bits!', lineRaid:'is raiding with {amount} friends!',
+              linePoints:'redeemed {reward}!' };
+const FRAMES = { candy: ['#e9505c', '#fff6ec'], mint: ['#7ccfa8', '#fff6ec'], pink: ['#f29bb4', '#fff6ec'], gold: ['#e8b54a', '#fff6ec'] };
+const INK = '#4a2418', CREAM = '#fff6ec';
+const CONF = ['#e9505c', '#f29bb4', '#7ccfa8', '#f3c85a', '#fff6ec'];
+
+function start(userCfg, base, GEO){
+  const S = Object.assign({}, DEF);
+  for (const k in userCfg) if (userCfg[k] !== undefined && userCfg[k] !== '' && userCfg[k] !== null) S[k] = userCfg[k];
+  ['size','camX','camY','camSize','amount','speed','loop','tagX','tagY','cardTime'].forEach(k => S[k] = +S[k]);
+  ['room','kitten','mantel','cam','sparkles','frameDeco','showMsg'].forEach(k => S[k] = S[k] === true || S[k] === 'true' || S[k] === 1 || S[k] === '1');
+  if (!S.loop) S.loop = 24;
+  const L = S.loop, spd = (S.speed || 100) / 100;
+  const w = n => TAU * n / L;
+
+  let cv = document.getElementById('sk-canvas');
+  if (!cv){ cv = document.createElement('canvas'); cv.id = 'sk-canvas'; document.body.appendChild(cv); }
+  cv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none';
+  const cx = cv.getContext('2d');
+  let W = 0, H = 0, DPR = 1, scene = null, flakes = [], pos = {};
+
+  const IMG = {}, names = ['stocking','kitten','happy','mantel','yarn','ornament','pompom'].concat(S.room ? ['room_h','room_v'] : []);
+  let loaded = 0, fontsOk = false;
+  names.forEach(n => {
+    const im = new Image();
+    im.crossOrigin = 'anonymous';
+    im.onload = im.onerror = () => { if (++loaded === names.length) { build(); requestAnimationFrame(frame); } };
+    im.src = base + n + '.' + (GEO.ext || 'png');
+    IMG[n] = im;
+  });
+  try { document.fonts.load('700 40px Fredoka').then(() => { fontsOk = true; }, () => { fontsOk = true; }); } catch (e) { fontsOk = true; }
+
+  let seed = 17;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const m0 = () => Math.min(W, H) / 1080;
+  const ok = n => IMG[n] && IMG[n].naturalWidth > 0;
+  const smooth = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
+
+  function build(){
+    seed = 17;
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    const vertical = S.layout === 'v' || (S.layout === 'auto' && H > W);
+    const k = S.size / 100, m = Math.min(W, H);
+    const dflt = (key, vv) => vertical && +S[key] === DEF[key] ? vv : +S[key];
+    pos = { camX: dflt('camX', 50), camY: dflt('camY', 44), tagX: dflt('tagX', 50), tagY: dflt('tagY', 20) };   // 9:16: tag hangs above the frame
+    // horizontal: shelf + stocking on the chosen side; vertical: right side (bottom-left is the TikTok comment area)
+    const right = vertical || S.side === 'right';
+    const g = GEO.stocking, sh = m * (vertical ? 0.40 : 0.50) * k, sw = sh * g.w / g.h;
+    const mg = GEO.mantel, mw = sw * 2.0, mh = mw * mg.h / mg.w;
+    const mx = right ? W - mw + mw * 0.06 : -mw * 0.06, my = H * (vertical ? 0.58 : 0.36);
+    const stx = right ? W - mw * 0.55 - sw * 0.5 : mw * 0.55 - sw * 0.5;
+    const sty = my + mh * 0.70 + sh * 0.16;                        // hangs a little below the shelf on a ribbon (room for the kitten's head)
+    scene = { vertical, right, mantel: { x: mx, y: my, w: mw, h: mh }, stocking: { x: stx, y: sty, w: sw, h: sh, k: sh / g.h }, hookY: my + mh * 0.62 };
+    initSnow();
+  }
+
+  // ---------- snow + sparkles ----------
+  function initSnow(){
+    const n = Math.round([0, 70, 150, 280][Math.max(0, Math.min(3, S.amount | 0))] * (W * H) / (1920 * 1080));
+    flakes = [];
+    for (let i = 0; i < n; i++){
+      const z = rnd();
+      flakes.push({ x0: rnd() * W, off: rnd(), m: z > 0.7 ? 2 : 1, r: (1.4 + z * 3.2) * m0(), a: 0.5 + z * 0.5,
+                    wn: 1 + Math.floor(rnd() * 3), wp: rnd() * TAU, wd: 8 + rnd() * 20 });
+    }
+  }
+  function drawSnow(t){
+    cx.fillStyle = '#fff';
+    for (const f of flakes){
+      const y = ((t / L) * f.m + f.off) % 1 * (H + 20) - 10, x = f.x0 + Math.sin(w(f.wn) * t + f.wp) * f.wd;
+      cx.globalAlpha = f.a; cx.beginPath(); cx.arc(x, y, f.r, 0, TAU); cx.fill();
+    }
+    cx.globalAlpha = 1;
+  }
+  function hash(a, b){ const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); }
+  function sparkle(x, y, r, a){
+    cx.save(); cx.globalAlpha = a; cx.translate(x, y); cx.fillStyle = '#fff8e6'; cx.beginPath();
+    for (let i = 0; i < 4; i++){ const an = i * TAU / 4; cx.lineTo(Math.cos(an) * r, Math.sin(an) * r); cx.lineTo(Math.cos(an + TAU / 8) * r * 0.22, Math.sin(an + TAU / 8) * r * 0.22); }
+    cx.closePath(); cx.fill(); cx.restore();
+  }
+  function sparklesIn(box, t, count, salt){
+    for (let i = 0; i < count; i++){
+      const n = 2 + (i % 3), c = (t / L) * n + i * 0.37 + salt, cyc = Math.floor(c) % n, p = c - Math.floor(c);
+      const a = Math.sin(Math.min(1, p * 3) * Math.PI);
+      if (a <= 0.01) continue;
+      sparkle(box.x + hash(i + salt * 7, cyc) * box.w, box.y + hash(cyc + 3, i + salt) * box.h, (8 + hash(i, salt) * 10) * m0() * 1.4, a);
+    }
+  }
+
+  // ---------- mantel: candle flames flicker (soft glow drawn over the painted flames) ----------
+  function drawMantel(t){
+    if (!ok('mantel')) return;                                     // a missing image never stops the widget
+    const mt = scene.mantel;
+    cx.save(); cx.translate(mt.x + mt.w / 2, mt.y); cx.scale(scene.right ? -1 : 1, 1);
+    cx.drawImage(IMG.mantel, -mt.w / 2, 0, mt.w, mt.h); cx.restore();
+    cx.save(); cx.globalCompositeOperation = 'lighter';
+    (GEO.mantel.flames || []).forEach(([fx, fy], i) => {
+      const x = scene.right ? mt.x + mt.w * (1 - fx) : mt.x + mt.w * fx, y = mt.y + mt.h * fy;
+      const f = 0.75 + 0.25 * Math.sin(t * 9 + i * 1.7) * Math.sin(t * 5.3 + i * 3.4), R = mt.h * 0.2 * f;
+      const gr = cx.createRadialGradient(x, y, 0, x, y, R);
+      gr.addColorStop(0, 'rgba(255,214,120,.5)'); gr.addColorStop(1, 'rgba(255,190,90,0)');
+      cx.fillStyle = gr; cx.fillRect(x - R, y - R, R * 2, R * 2);
+    });
+    cx.restore();
+  }
+
+  // ---------- stocking + kitten ----------
+  function kittenPose(t, react){
+    // idle loop: hides low (just ears peek), comes up to rest its paws on the cuff, tilts its head, ducks again
+    if (react && react.p < 3){                                     // pops up (bottom stays in the stocking) and bounces
+      const p = react.p, rise = smooth(p / 0.25) * (1 - smooth((p - 2.6) / 0.4));
+      return { up: 0.35 + 0.65 * rise + Math.abs(Math.sin(p * TAU * 1.4)) * 0.06 * (p < 2 ? 1 : 0) * rise, happy: p < 2.7, tilt: Math.sin(p * TAU * 1.1) * 0.06 };
+    }
+    const q = t / L;
+    const up = smooth((q - 0.06) / 0.05) * (1 - smooth((q - 0.46) / 0.05)) + smooth((q - 0.58) / 0.05) * (1 - smooth((q - 0.94) / 0.05)) * 0.92;
+    return { up: 0.35 + 0.65 * up, happy: false, tilt: Math.sin(w(3) * t) * 0.07 * up };
+  }
+  function drawStocking(t, react){
+    if (!ok('stocking') || !ok('kitten') || !ok('happy')) return;
+    const st = scene.stocking, g = GEO.stocking, k = st.k, [cl, ct, cr] = g.cuff;
+    const sway = Math.sin(w(2) * t) * 0.025 + (react && react.p < 1.2 ? Math.sin(react.p * TAU * 2) * 0.06 * (1 - react.p / 1.2) : 0);
+    cx.save();
+    cx.translate(st.x + st.w * 0.475, scene.hookY); cx.rotate(sway); cx.translate(-(st.x + st.w * 0.475), -scene.hookY);
+    // ribbon from the shelf down to the stocking's loop
+    const lx = st.x + st.w * 0.475, u = m0();
+    for (const [c, lw2] of [[INK, 11 * u], ['#e9505c', 6 * u]]){ cx.strokeStyle = c; cx.lineWidth = lw2; cx.beginPath(); cx.moveTo(lx, scene.hookY); cx.lineTo(lx, st.y + st.h * 0.03); cx.stroke(); }
+    cx.drawImage(IMG.stocking, st.x, st.y, st.w, st.h);
+    // kitten in front of the stocking, clipped at the cuff: peeking = only the head above the cuff,
+    // resting = paws over the cuff's top edge, alert = pops up high
+    if (S.kitten){
+      const pose = kittenPose(t, react), key = pose.happy ? 'happy' : 'kitten', kg = GEO[key];
+      const cuffW = (cr - cl) * k, ks = cuffW * 0.9 / kg.base;
+      const kw = kg.w * ks, kh = kg.h * ks, cxp = st.x + (cl + cr) / 2 * k, cuffY = st.y + ct * k;
+      const top = cuffY + kh * 0.30 - kh * 1.2 * pose.up;
+      const clipY = st.y + g.lip * k + kh * 0.07 * smooth((pose.up - 0.5) / 0.4);   // behind the cuff's front lip; paws over it when resting
+      cx.save();
+      cx.beginPath(); cx.rect(st.x - st.w * 2, st.y - st.h * 3, st.w * 5, clipY - (st.y - st.h * 3)); cx.clip();
+      cx.translate(cxp, top + kh); cx.rotate(pose.tilt); cx.drawImage(IMG[key], -kg.bx * ks, -kh, kw, kh);
+      cx.restore();
+    }
+    cx.restore();
+    if (S.sparkles) sparklesIn({ x: st.x, y: st.y, w: st.w, h: st.h * 0.6 }, t, 3, 4);
+  }
+
+  // ---------- knitted camera frame + pom-poms + light trails ----------
+  const ASPECT = { '16:9': 16 / 9, '4:3': 4 / 3, '1:1': 1, '9:16': 9 / 16 };
+  function roundRect(x, y, w2, h2, r){
+    cx.beginPath(); cx.moveTo(x + r, y); cx.arcTo(x + w2, y, x + w2, y + h2, r); cx.arcTo(x + w2, y + h2, x, y + h2, r);
+    cx.arcTo(x, y + h2, x, y, r); cx.arcTo(x, y, x + w2, y, r); cx.closePath();
+  }
+  function rrPoint(x, y, w2, h2, r, d){
+    const sx = w2 - 2 * r, sy = h2 - 2 * r, q = Math.PI * r / 2, P = 2 * (sx + sy) + 4 * q;
+    d = ((d % P) + P) % P;
+    const arc = (c0, c1, an) => [c0 + Math.cos(an) * r, c1 + Math.sin(an) * r];
+    const segs = [[sx, u => [x + r + u, y]], [q, u => arc(x + w2 - r, y + r, -Math.PI / 2 + u / r)],
+                  [sy, u => [x + w2, y + r + u]], [q, u => arc(x + w2 - r, y + h2 - r, u / r)],
+                  [sx, u => [x + w2 - r - u, y + h2]], [q, u => arc(x + r, y + h2 - r, Math.PI / 2 + u / r)],
+                  [sy, u => [x, y + h2 - r - u]], [q, u => arc(x + r, y + r, Math.PI + u / r)]];
+    for (const [len, f] of segs){ if (d <= len) return f(d); d -= len; }
+    return [x + r, y];
+  }
+  function lightTrails(rect, t, laps, count, lw, frac){
+    const [x, y, w2, h2, r] = rect, P = 2 * (w2 - 2 * r + h2 - 2 * r) + 2 * Math.PI * r;
+    const tail = P * frac, N = Math.ceil(tail / (lw * 0.2));
+    cx.save(); cx.globalCompositeOperation = 'lighter';
+    for (let c = 0; c < count; c++){
+      const head = (t / L) * P * laps + c * P / count;
+      cx.fillStyle = '#fff3c4';
+      for (let i = N; i >= 0; i--){
+        const kk = i / N, [px, py] = rrPoint(x, y, w2, h2, r, head - kk * tail);
+        cx.globalAlpha = (1 - kk) * (1 - kk) * 0.2;
+        cx.beginPath(); cx.arc(px, py, lw * (0.7 - 0.4 * kk), 0, TAU); cx.fill();
+      }
+      const [hx, hy] = rrPoint(x, y, w2, h2, r, head), R = lw * 3.4;
+      const gr = cx.createRadialGradient(hx, hy, 0, hx, hy, R);
+      gr.addColorStop(0, 'rgba(255,248,220,.95)'); gr.addColorStop(0.35, 'rgba(255,230,160,.35)'); gr.addColorStop(1, 'rgba(255,230,160,0)');
+      cx.globalAlpha = 1; cx.fillStyle = gr; cx.fillRect(hx - R, hy - R, R * 2, R * 2);
+    }
+    cx.restore();
+  }
+  function camRect(){
+    const ar = ASPECT[S.camAspect] || 16 / 9;
+    let fw = W * S.camSize / 100 * (scene.vertical ? 1.9 : 1), fh = fw / ar;
+    if (fw > W * 0.92){ fw = W * 0.92; fh = fw / ar; }
+    if (fh > H * 0.9){ fh = H * 0.9; fw = fh * ar; }
+    const edge = S.frameDeco ? Math.min(fw, fh) * 0.09 : 0;
+    const x = Math.max(fw / 2 + edge, Math.min(W - fw / 2 - edge, W * pos.camX / 100)) - fw / 2;
+    const y = Math.max(fh / 2 + edge * 1.6, Math.min(H - fh / 2 - edge, H * pos.camY / 100)) - fh / 2;
+    return [x, y, fw, fh];
+  }
+  function drawCam(t){
+    const [x, y, fw, fh] = camRect(), lw = 14 * m0(), r = 22 * m0(), [ca, cb] = FRAMES[S.frameStyle] || FRAMES.candy;
+    const P = 2 * (fw + fh), seg = lw * 1.6;
+    cx.save(); cx.lineJoin = 'round';
+    cx.strokeStyle = INK; cx.lineWidth = lw + 5 * m0(); roundRect(x, y, fw, fh, r); cx.stroke();
+    cx.strokeStyle = cb; cx.lineWidth = lw; roundRect(x, y, fw, fh, r); cx.stroke();
+    cx.strokeStyle = ca; cx.setLineDash([seg, seg]); roundRect(x, y, fw, fh, r); cx.stroke();     // knitted blocks
+    cx.setLineDash([]);
+    // knit "V" stitches: a soft darker line in the middle of the band
+    cx.strokeStyle = 'rgba(74,36,24,.16)'; cx.lineWidth = lw * 0.14; cx.setLineDash([lw * 0.35, lw * 0.25]);
+    roundRect(x, y, fw, fh, r); cx.stroke();
+    cx.restore();
+    lightTrails([x, y, fw, fh, r], t, 2, 2, lw * 0.5, 0.12);
+    if (S.frameDeco && ok('pompom')){
+      const pg = GEO.pompom, ps = Math.min(fw, fh) * 0.2, ph = ps * pg.h / pg.w;
+      for (const [px, phs] of [[x, 0.3], [x + fw, 1.8]]){
+        cx.save(); cx.translate(px, y); cx.rotate(Math.sin(w(3) * t + phs) * 0.05);
+        cx.drawImage(IMG.pompom, -ps / 2, -ph * 0.55, ps, ph); cx.restore();
+      }
+    }
+    if (S.sparkles) sparklesIn({ x, y, w: fw, h: fh * 0.2 }, t, 2, 21);
+  }
+
+  // ---------- alerts: kitten pops up, yarn + ornament bounce out, a gift tag swings down with the name ----------
+  const queue = [];
+  let active = null, evCount = 0, frozen = null;
+  const clock = () => frozen !== null ? frozen : performance.now() / 1000;
+  const back = p => { const c = 1.7; return 1 + (c + 1) * Math.pow(p - 1, 3) + c * Math.pow(p - 1, 2); };
+  function fire(ev){
+    if (!ev || !ev.kind) return;
+    queue.push(Object.assign({ name: 'Someone', amount: 0, message: '', reward: '' }, ev, { n: evCount++ }));
+    if (!active) next();
+  }
+  function next(){ const ev = queue.shift(); active = ev ? { ev, t0: clock() } : null; }
+  function fill(tpl, ev){
+    const amt = ev.kind === 'tip' ? S.currency + (Math.round(+ev.amount * 100) / 100) : String(ev.amount || '');
+    return String(tpl || '').replace(/\{name\}/g, ev.name).replace(/\{amount\}/g, amt).replace(/\{reward\}/g, ev.reward || '');
+  }
+  const KIND = { follow: ['lblFollow', 'lineFollow'], sub: ['lblSub', 'lineSub'], gift: ['lblGift', 'lineGift'], tip: ['lblTip', 'lineTip'],
+                 cheer: ['lblCheer', 'lineCheer'], raid: ['lblRaid', 'lineRaid'], points: ['lblPoints', 'linePoints'] };
+  function fitFont(text, weight, size, maxW){
+    let fs = size;
+    do { cx.font = `${weight} ${fs}px Fredoka, 'Segoe UI', sans-serif`; if (cx.measureText(text).width <= maxW) break; fs -= 2; } while (fs > 14);
+    return fs;
+  }
+  function wrapLines(text, maxW, maxLines){
+    const words = String(text).split(/\s+/), lines = [];
+    let cur = '';
+    for (const wd of words){
+      const t2 = cur ? cur + ' ' + wd : wd;
+      if (cx.measureText(t2).width > maxW && cur){ lines.push(cur); cur = wd; } else cur = t2;
+      if (lines.length === maxLines) break;
+    }
+    if (cur && lines.length < maxLines) lines.push(cur);
+    return lines;
+  }
+  function heart(x, y, s, col){
+    cx.save(); cx.translate(x, y); cx.scale(s, s); cx.fillStyle = col; cx.beginPath();
+    cx.moveTo(0, 6); cx.bezierCurveTo(-12, -2, -6, -12, 0, -5); cx.bezierCurveTo(6, -12, 12, -2, 0, 6); cx.fill(); cx.restore();
+  }
+  // gift tag: scalloped cream tag with a punched hole, stitched edge, hearts; hangs from a ribbon off the top of the screen
+  function drawTag(ev, anchorX, anchorY, drop, swing, a){
+    const [lk, nk] = KIND[ev.kind] || KIND.follow, u = m0();
+    const label = String(S[lk] || '').toUpperCase(), line = fill(S[nk], ev), msg = S.showMsg ? String(ev.message || '').trim() : '';
+    const maxW = Math.min(W * 0.6, 820 * u), padX = 52 * u;
+    const nameFs = fitFont(ev.name, 700, 66 * u, maxW - padX * 2), lineFs = fitFont(line, 600, 32 * u, maxW - padX * 2);
+    cx.font = `500 ${25 * u}px Fredoka, sans-serif`;
+    const msgLines = msg ? wrapLines('“' + msg + '”', maxW - padX * 2, 2) : [];
+    cx.font = `700 ${nameFs}px Fredoka, sans-serif`; let tw = cx.measureText(ev.name).width;
+    cx.font = `600 ${lineFs}px Fredoka, sans-serif`; tw = Math.max(tw, cx.measureText(line).width);
+    cx.font = `700 ${24 * u}px Fredoka, sans-serif`; tw = Math.max(tw, cx.measureText(label).width + 80 * u);
+    cx.font = `500 ${25 * u}px Fredoka, sans-serif`; for (const l of msgLines) tw = Math.max(tw, cx.measureText(l).width);
+    const cw = Math.max(400 * u, Math.min(maxW, tw + padX * 2));
+    const bumpsN = Math.max(6, Math.round(Math.max(400 * u, Math.min(maxW, tw + padX * 2)) / (60 * u)));
+    const ch = 92 * u + nameFs * 1.15 + lineFs * 1.3 + (msgLines.length ? msgLines.length * 32 * u + 14 * u : 0) + 40 * u + Math.max(400 * u, Math.min(maxW, tw + padX * 2)) / bumpsN / 2;
+    const ribbon = anchorY + drop;                                   // tag top (hole) y
+    const [rc] = FRAMES[S.frameStyle] || FRAMES.candy;
+    cx.save(); cx.globalAlpha = a;
+    cx.translate(anchorX, 0); cx.rotate(swing); cx.translate(-anchorX, 0);   // pendulum from the top of the screen
+    // ribbon
+    cx.strokeStyle = INK; cx.lineWidth = 12 * u; cx.beginPath(); cx.moveTo(anchorX, -10); cx.lineTo(anchorX, ribbon + 30 * u); cx.stroke();
+    cx.strokeStyle = rc; cx.lineWidth = 7 * u; cx.beginPath(); cx.moveTo(anchorX, -10); cx.lineTo(anchorX, ribbon + 30 * u); cx.stroke();
+    const x = anchorX - cw / 2, y = ribbon;
+    // scalloped tag body
+    const bumps = Math.max(6, Math.round(cw / (60 * u))), br = cw / bumps / 2;
+    const tagPath = () => {
+      cx.beginPath();
+      cx.moveTo(x + 30 * u, y + 40 * u);
+      cx.quadraticCurveTo(anchorX, y - 18 * u, x + cw - 30 * u, y + 40 * u);
+      cx.lineTo(x + cw, y + 60 * u); cx.lineTo(x + cw, y + ch - br);
+      for (let i = bumps - 1; i >= 0; i--){ const bx = x + (i + 0.5) * (cw / bumps); cx.arc(bx, y + ch - br, br, 0, Math.PI, false); }
+      cx.lineTo(x, y + 60 * u); cx.closePath();
+    };
+    cx.fillStyle = 'rgba(74,36,24,.22)'; cx.save(); cx.translate(6 * u, 12 * u); tagPath(); cx.fill(); cx.restore();
+    cx.fillStyle = CREAM; tagPath(); cx.fill();
+    cx.strokeStyle = INK; cx.lineWidth = 6 * u; tagPath(); cx.stroke();
+    // stitched inner line
+    cx.save(); cx.setLineDash([10 * u, 8 * u]); cx.strokeStyle = 'rgba(232,80,92,.45)'; cx.lineWidth = 3 * u;
+    roundRect(x + 22 * u, y + 62 * u, cw - 44 * u, ch - 62 * u - br - 20 * u, 18 * u); cx.stroke(); cx.restore();
+    // hole + ribbon knot
+    cx.fillStyle = INK; cx.beginPath(); cx.arc(anchorX, y + 22 * u, 14 * u, 0, TAU); cx.fill();
+    cx.fillStyle = '#f7e7d4'; cx.beginPath(); cx.arc(anchorX, y + 22 * u, 9 * u, 0, TAU); cx.fill();
+    cx.fillStyle = rc; cx.strokeStyle = INK; cx.lineWidth = 4 * u;
+    for (const s of [-1, 1]){ cx.beginPath(); cx.ellipse(anchorX + s * 26 * u, y + 20 * u, 24 * u, 14 * u, s * 0.4, 0, TAU); cx.fill(); cx.stroke(); }
+    cx.beginPath(); cx.arc(anchorX, y + 20 * u, 11 * u, 0, TAU); cx.fill(); cx.stroke();
+    // text
+    cx.textAlign = 'center'; cx.textBaseline = 'middle';
+    let ty = y + 82 * u;
+    cx.font = `700 ${24 * u}px Fredoka, sans-serif`; cx.fillStyle = '#c8323f'; cx.fillText(label, anchorX, ty);
+    heart(anchorX - cx.measureText(label).width / 2 - 26 * u, ty, 1.3 * u, '#f29bb4'); heart(anchorX + cx.measureText(label).width / 2 + 26 * u, ty, 1.3 * u, '#f29bb4');
+    ty += 18 * u + nameFs * 0.6;
+    // name on a soft pink pill, like the concept
+    cx.font = `700 ${nameFs}px Fredoka, sans-serif`;
+    const nw = cx.measureText(ev.name).width + 56 * u, nh = nameFs * 1.15;
+    cx.fillStyle = '#fbd9e0'; roundRect(anchorX - nw / 2, ty - nh / 2, nw, nh, nh / 2); cx.fill();
+    cx.fillStyle = INK; cx.fillText(ev.name, anchorX, ty + 2 * u);
+    ty += nh / 2 + lineFs * 0.85;
+    cx.font = `600 ${lineFs}px Fredoka, sans-serif`; cx.fillStyle = INK; cx.fillText(line, anchorX, ty);
+    ty += lineFs * 0.5 + 24 * u;
+    cx.font = `500 ${25 * u}px Fredoka, sans-serif`; cx.fillStyle = '#8a6252';
+    for (const l of msgLines){ cx.fillText(l, anchorX, ty); ty += 32 * u; }
+    cx.restore();
+  }
+  function drawAlert(now){
+    if (!active) return;
+    const ev = active.ev, p = now - active.t0, hold = Math.max(2, S.cardTime), END = 1.2 + hold + 0.7;
+    if (p >= END){ next(); return; }
+    const st = scene.stocking, u = m0(), g = GEO.stocking;
+    // yarn + ornament bounce out of the stocking cuff and roll away (closed form, two bounces)
+    if (p < 3.2){
+      const ox = st.x + (g.cuff[0] + g.cuff[2]) / 2 * st.k, oy = st.y + g.cuff[1] * st.k, dir = scene.right ? -1 : 1;
+      const floor = Math.min(H - 40 * u, st.y + st.h * 1.05);
+      for (const [key, vx, vy, sz, dl] of [['yarn', 260, -720, 110, 0.05], ['ornament', 420, -560, 90, 0.18]]){
+        const q = p - dl; if (q < 0 || !ok(key)) continue;
+        const gx = 1500 * u; let x = ox + dir * vx * u * q, y = oy + vy * u * q + gx * q * q / 2;
+        if (y > floor){                                            // bounce: reflect with damping, then settle
+          const tHit = (-vy * u + Math.sqrt((vy * u) ** 2 + 2 * gx * (floor - oy))) / gx, q2 = q - tHit, v2 = -(vy * u + gx * tHit) * 0.45;
+          y = Math.min(floor, floor - v2 * q2 + gx * q2 * q2 / 2);
+        }
+        const a = Math.max(0, 1 - Math.max(0, q - 2.2) / 0.6), gg = GEO[key], s2 = sz * u, h2 = s2 * gg.h / gg.w;
+        cx.save(); cx.globalAlpha = a; cx.translate(x, y - h2 / 2); cx.rotate(q * 4 * dir); cx.drawImage(IMG[key], -s2 / 2, -h2 / 2, s2, h2); cx.restore();
+      }
+      if (p < 1.4) for (let i = 0; i < 26; i++){                     // a little confetti puff from the cuff
+        const ang = -Math.PI / 2 + (hash(i, ev.n) - 0.5) * 2, v = (300 + hash(ev.n, i) * 380) * u;
+        const x = ox + Math.cos(ang) * v * p, y = oy + Math.sin(ang) * v * p + 700 * u * p * p;
+        cx.save(); cx.globalAlpha = Math.max(0, 1 - p / 1.4); cx.translate(x, y); cx.rotate(p * 8 + i);
+        cx.fillStyle = CONF[i % CONF.length]; cx.fillRect(-6 * u, -4 * u, 12 * u, 8 * u); cx.restore();
+      }
+    }
+    // tag: drops in from above on its ribbon, swings like a pendulum and settles, then is pulled back up
+    const ax = W * pos.tagX / 100, hang = H * pos.tagY / 100 - 120 * u;
+    let drop, swing, a = 1;
+    if (p < 0.3){ drop = -500 * u; swing = 0; a = 0; }
+    else {
+      const q = p - 0.3, inQ = Math.min(1, q / 0.55);
+      drop = -400 * u + (hang + 400 * u) * back(inQ);
+      swing = Math.sin(q * 5.2) * 0.14 * Math.exp(-q * 1.5);
+      const outQ = Math.max(0, (p - (END - 0.7)) / 0.7);
+      if (outQ){ drop -= (hang + 500 * u) * outQ * outQ; a = 1 - outQ * 0.3; }
+    }
+    if (p >= 0.3) drawTag(ev, ax, 0, drop, swing, a);
+  }
+
+  window.__setTime = s => { frozen = s; };
+  window.__ready = () => loaded === names.length && !!scene && fontsOk;
+  window.__draw = s => draw(s);
+  window.__fire = ev => fire(ev);
+  function frame(){ draw(clock()); requestAnimationFrame(frame); }
+
+  function draw(abs){
+    const t = ((abs * spd) % L + L) % L;
+    cx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    cx.clearRect(0, 0, W, H);
+    if (S.room && ok(scene.vertical ? 'room_v' : 'room_h')){
+      const im = IMG[scene.vertical ? 'room_v' : 'room_h'], k = Math.max(W / im.naturalWidth, H / im.naturalHeight);
+      cx.drawImage(im, (W - im.naturalWidth * k) / 2, (H - im.naturalHeight * k) / 2, im.naturalWidth * k, im.naturalHeight * k);
+      if (S.cam){ const [fx, fy, fw, fh] = camRect(); cx.save(); cx.globalCompositeOperation = 'destination-out'; roundRect(fx, fy, fw, fh, 22 * m0()); cx.fill(); cx.restore(); }
+    }
+    if (S.amount > 0) drawSnow(t);
+    if (S.cam) drawCam(t);
+    const react = active ? { kind: active.ev.kind, p: abs - active.t0 } : null;
+    if (S.mantel) drawMantel(t);
+    drawStocking(t, react);
+    drawAlert(abs);
+  }
+  window.addEventListener('resize', () => { if (loaded === names.length) build(); });
+  return { fire };
+}
+window.StockingKitty = { start, DEF };
+})();
+
+(function(){
+  var Q = new URLSearchParams(location.search), cfg = {};
+  Q.forEach(function(v, k){ cfg[k] = v === 'true' ? true : v === 'false' ? false : v; });
+  if (Q.get('bg')) document.body.style.background = '#' + Q.get('bg').replace('#', '');
+  StockingKitty.start(cfg, 'sk-p4w7nd/', window.SK_GEO);
+})();
+</script></body></html>
