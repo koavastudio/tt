@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>Sleigh Express</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}</style></head>
+<body><script>window.SE_GEO = {"deer":{"w":941,"h":864},"deerhappy":{"w":861,"h":910},"sleigh":{"w":1192,"h":889,"tip":[1154.0,471.0]},"chute":{"w":950,"h":1022,"hook":[469.0,1019.0]},"gift":{"w":1001,"h":1012},"sign":{"w":846,"h":1438,"plank":[74.0,563.0,706.0,783.0]},"hill":{"w":1456,"h":578},"moon":{"w":1020,"h":1113},"ext":"webp"};
+/* Sleigh Express — kawaii baby-reindeer sleigh decoration + StreamElements alert widget. Engine forked from Stocking Kitty.
+   const api = SleighExpress.start(cfg, assetBase, geo)  ->  api.fire({ kind, name, amount, message, reward })
+   Decoration (also on the plain OBS / TikTok link): a sleepy moon, a snowy hill with a signpost and presents, a candy-cane
+   camera frame with presents and snow on its top edge, and once per loop a baby reindeer pulls a little sleigh across the sky.
+   Alerts (StreamElements only): the reindeer gallops in, a present drops on a parachute, lands with a bounce, the parachute
+   floats away and a card with a ribbon banner pops up with the viewer's name.
+   window.__setTime(abs s) / __draw(abs s) / __fire(ev) for frame-exact capture. */
+(function(){
+const TAU = Math.PI * 2;
+const DEF = { layout:'auto', room:false, flyby:true, moon:true, hill:true, cam:true, sparkles:true, frameDeco:true,
+              hillSide:'right', size:100, camAspect:'16:9', camX:72, camY:38, camSize:36, frameStyle:'candy', signText:'NORTH POLE',
+              amount:2, speed:100, loop:24, dropX:38, dropY:64, cardTime:5, showMsg:true, currency:'$',
+              lblFollow:'New follower', lblSub:'New sub', lblGift:'Gift subs', lblTip:'Tip', lblCheer:'Bits',
+              lblRaid:'Raid', lblPoints:'Channel points',
+              lineFollow:'thanks for the follow!', lineSub:'just subscribed!', lineGift:'gifted {amount} subs!',
+              lineTip:'tipped {amount}!', lineCheer:'cheered {amount} bits!', lineRaid:'is raiding with {amount} friends!',
+              linePoints:'redeemed {reward}!' };
+const FRAMES = { candy: ['#e9505c', '#fff6ec'], mint: ['#7ccfa8', '#fff6ec'], pink: ['#f29bb4', '#fff6ec'], gold: ['#e8b54a', '#fff6ec'] };
+const BANNER = { candy: '#7ccfa8', mint: '#7ccfa8', pink: '#f29bb4', gold: '#e8b54a' };      // the concept's mint banner by default
+const INK = '#4a2418', CREAM = '#fff6ec';
+const CONF = ['#e9505c', '#f29bb4', '#7ccfa8', '#f3c85a', '#fff6ec'];
+
+function start(userCfg, base, GEO){
+  const S = Object.assign({}, DEF);
+  for (const k in userCfg) if (userCfg[k] !== undefined && userCfg[k] !== '' && userCfg[k] !== null) S[k] = userCfg[k];
+  ['size','camX','camY','camSize','amount','speed','loop','dropX','dropY','cardTime'].forEach(k => S[k] = +S[k]);
+  ['room','flyby','moon','hill','cam','sparkles','frameDeco','showMsg'].forEach(k => S[k] = S[k] === true || S[k] === 'true' || S[k] === 1 || S[k] === '1');
+  if (!S.loop) S.loop = 24;
+  const L = S.loop, spd = (S.speed || 100) / 100;
+  const w = n => TAU * n / L;
+
+  let cv = document.getElementById('sx-canvas');
+  if (!cv){ cv = document.createElement('canvas'); cv.id = 'sx-canvas'; document.body.appendChild(cv); }
+  cv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none';
+  const cx = cv.getContext('2d');
+  let W = 0, H = 0, DPR = 1, scene = null, flakes = [], pos = {}, stripe = null;
+
+  const IMG = {}, names = ['deer','deerhappy','sleigh','chute','gift','sign','hill','moon'].concat(S.room ? ['room_h','room_v'] : []);
+  let loaded = 0, fontsOk = false;
+  names.forEach(n => {
+    const im = new Image();
+    im.crossOrigin = 'anonymous';
+    im.onload = im.onerror = () => { if (++loaded === names.length) { build(); requestAnimationFrame(frame); } };
+    im.src = base + n + '.' + (GEO.ext || 'png');
+    IMG[n] = im;
+  });
+  try { document.fonts.load('700 40px Fredoka').then(() => { fontsOk = true; }, () => { fontsOk = true; }); } catch (e) { fontsOk = true; }
+
+  let seed = 19;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const m0 = () => Math.min(W, H) / 1080;
+  const ok = n => IMG[n] && IMG[n].naturalWidth > 0;
+  const smooth = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
+
+  function build(){
+    seed = 19;
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    const vertical = S.layout === 'v' || (S.layout === 'auto' && H > W);
+    const k = S.size / 100, m = Math.min(W, H);
+    const dflt = (key, vv) => vertical && +S[key] === DEF[key] ? vv : +S[key];
+    pos = { camX: dflt('camX', 50), camY: dflt('camY', 42), dropX: dflt('dropX', 30), dropY: dflt('dropY', 80) };
+    const right = vertical || S.hillSide === 'right';
+    const hg = GEO.hill, hw = m * (vertical ? 0.62 : 0.62) * k, hh = hw * hg.h / hg.w;
+    const hill = { x: right ? W - hw * 0.98 : -hw * 0.02, y: H - hh * 0.96, w: hw, h: hh };
+    const sg = GEO.sign, sh = hh * 1.2, sw = sh * sg.w / sg.h;
+    const sign = { x: hill.x + hw * (right ? 0.30 : 0.45), y: hill.y + hh * 0.38 - sh, w: sw, h: sh };
+    const mg = GEO.moon, mh = m * 0.16 * k;
+    const moon = { x: vertical ? W * 0.78 : W * 0.40, y: m * 0.03, w: mh * mg.w / mg.h, h: mh };
+    // the sleigh team: reindeer in front, sleigh behind, joined by code-drawn reins
+    const dh = m * 0.13 * k, sl = dh * 1.35;
+    scene = { vertical, right, hill, sign, moon, deerH: dh, sleighH: sl, flyY: H * (vertical ? 0.13 : 0.12) };
+    stripe = makeStripe();
+    initSnow();
+  }
+
+  // ---------- snow + sparkles ----------
+  function initSnow(){
+    const n = Math.round([0, 70, 150, 280][Math.max(0, Math.min(3, S.amount | 0))] * (W * H) / (1920 * 1080));
+    flakes = [];
+    for (let i = 0; i < n; i++){
+      const z = rnd();
+      flakes.push({ x0: rnd() * W, off: rnd(), m: z > 0.7 ? 2 : 1, r: (1.4 + z * 3.2) * m0(), a: 0.5 + z * 0.5,
+                    wn: 1 + Math.floor(rnd() * 3), wp: rnd() * TAU, wd: 8 + rnd() * 20 });
+    }
+  }
+  function drawSnow(t){
+    cx.fillStyle = '#fff';
+    for (const f of flakes){
+      const y = ((t / L) * f.m + f.off) % 1 * (H + 20) - 10, x = f.x0 + Math.sin(w(f.wn) * t + f.wp) * f.wd;
+      cx.globalAlpha = f.a; cx.beginPath(); cx.arc(x, y, f.r, 0, TAU); cx.fill();
+    }
+    cx.globalAlpha = 1;
+  }
+  function hash(a, b){ const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); }
+  function sparkle(x, y, r, a, col){
+    cx.save(); cx.globalAlpha = a; cx.translate(x, y); cx.fillStyle = col || '#fff8e6'; cx.beginPath();
+    for (let i = 0; i < 4; i++){ const an = i * TAU / 4; cx.lineTo(Math.cos(an) * r, Math.sin(an) * r); cx.lineTo(Math.cos(an + TAU / 8) * r * 0.22, Math.sin(an + TAU / 8) * r * 0.22); }
+    cx.closePath(); cx.fill(); cx.restore();
+  }
+  function sparklesIn(box, t, count, salt){
+    for (let i = 0; i < count; i++){
+      const n = 2 + (i % 3), c = (t / L) * n + i * 0.37 + salt, cyc = Math.floor(c) % n, p = c - Math.floor(c);
+      const a = Math.sin(Math.min(1, p * 3) * Math.PI);
+      if (a <= 0.01) continue;
+      sparkle(box.x + hash(i + salt * 7, cyc) * box.w, box.y + hash(cyc + 3, i + salt) * box.h, (8 + hash(i, salt) * 10) * m0() * 1.4, a);
+    }
+  }
+
+  // ---------- static scenery ----------
+  function drawMoon(t){
+    const mo = scene.moon;
+    cx.save(); cx.translate(mo.x + mo.w / 2, mo.y + mo.h / 2); cx.rotate(Math.sin(w(2) * t) * 0.05);
+    cx.drawImage(IMG.moon, -mo.w / 2, -mo.h / 2, mo.w, mo.h); cx.restore();
+    if (S.sparkles) sparklesIn({ x: mo.x - mo.w, y: mo.y, w: mo.w * 3, h: mo.h * 1.3 }, t, 3, 31);
+  }
+  function drawHill(t){
+    const hl = scene.hill, sg = scene.sign, g = GEO.sign;
+    cx.save(); cx.translate(sg.x + sg.w / 2, sg.y + sg.h); cx.rotate(Math.sin(w(2) * t) * 0.01);
+    cx.drawImage(IMG.sign, -sg.w / 2, -sg.h, sg.w, sg.h);
+    // sign text on the plank (code, so the buyer can change it)
+    const k = sg.w / g.w, [px0, py0, px1, py1] = g.plank, txt = String(S.signText || '').toUpperCase();
+    if (txt){
+      const bw = (px1 - px0) * k * 0.86, bx = -sg.w / 2 + (px0 + px1) / 2 * k - (px1 - px0) * k * 0.06, by = -sg.h + (py0 + py1) / 2 * k;
+      let fs = (py1 - py0) * k * 0.42;
+      do { cx.font = `700 ${fs}px Fredoka, 'Segoe UI', sans-serif`; if (cx.measureText(txt).width <= bw) break; fs -= 1; } while (fs > 8);
+      cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.lineJoin = 'round';
+      cx.lineWidth = fs * 0.22; cx.strokeStyle = '#fff6ec'; cx.strokeText(txt, bx, by + fs * 0.05);
+      cx.fillStyle = INK; cx.fillText(txt, bx, by + fs * 0.05);
+    }
+    cx.restore();
+    cx.drawImage(IMG.hill, hl.x, hl.y, hl.w, hl.h);
+  }
+
+  // ---------- sleigh team ----------
+  function drawTeam(x, y, t, happy, dir){
+    // x,y = centre of the reindeer; the sleigh trails behind; dir 1 = flying right
+    const dg = GEO[happy ? 'deerhappy' : 'deer'], dh = scene.deerH * (happy ? 1.04 : 1), dw = dh * dg.w / dg.h;
+    const sg = GEO.sleigh, shh = scene.sleighH, sw = shh * sg.w / sg.h;
+    const bob = Math.sin(t * 9) * 6 * m0(), bob2 = Math.sin(t * 9 - 0.8) * 6 * m0();
+    const sx = x - dir * (dw * 0.5 + sw * 0.62), sy = y + shh * 0.12 + bob2;
+    // sparkle trail from the runners
+    for (let i = 0; i < 10; i++){
+      const q = i / 10, tx = sx - dir * (sw * 0.5 + q * W * 0.18), ty = sy + shh * 0.35 + Math.sin(q * 6 + t * 3) * 12 * m0();
+      sparkle(tx, ty, (14 - q * 9) * m0(), (1 - q) * 0.9, i % 2 ? '#fff3c4' : '#ffd9e6');
+    }
+    cx.save(); cx.translate(sx, sy); cx.scale(dir, 1); cx.rotate(Math.sin(t * 4) * 0.03);
+    cx.drawImage(IMG.sleigh, -sw / 2, -shh / 2, sw, shh);
+    cx.restore();
+    // reins: from the sleigh's front tip to the reindeer's chest
+    const tipX = sx + dir * (sg.tip[0] / sg.w - 0.5) * sw, tipY = sy + (sg.tip[1] / sg.h - 0.5) * shh;
+    const chX = x - dir * dw * 0.05, chY = y + bob + dh * 0.05;
+    for (const [c, lw] of [[INK, 7 * m0()], ['#e9505c', 3.5 * m0()]]){
+      cx.strokeStyle = c; cx.lineWidth = lw; cx.lineCap = 'round';
+      cx.beginPath(); cx.moveTo(tipX, tipY); cx.quadraticCurveTo((tipX + chX) / 2, Math.max(tipY, chY) + dh * 0.18, chX, chY); cx.stroke();
+    }
+    cx.save(); cx.translate(x, y + bob); cx.scale(dir, 1); cx.rotate(Math.sin(t * 9) * 0.05);
+    cx.drawImage(IMG[happy ? 'deerhappy' : 'deer'], -dw / 2, -dh / 2, dw, dh);
+    cx.restore();
+  }
+  function teamSpan(){ const dg = GEO.deer, sg = GEO.sleigh; return scene.deerH * dg.w / dg.h + scene.sleighH * sg.w / sg.h * 1.3; }
+  // idle fly-by: once per loop, left -> right across the sky in 5 s (t 3..8)
+  function idleFlyby(t){
+    const a = 3, d = 5;
+    if (t < a || t > a + d) return;
+    const q = (t - a) / d, span = teamSpan();
+    const x = -span * 0.6 + (W + span * 1.6) * q, y = scene.flyY + Math.sin(q * Math.PI * 2) * H * 0.03;
+    drawTeam(x, y, t, false, 1);
+  }
+
+  // ---------- candy-cane camera frame, snow cap, a stack of presents on top ----------
+  const ASPECT = { '16:9': 16 / 9, '4:3': 4 / 3, '1:1': 1, '9:16': 9 / 16 };
+  function makeStripe(){
+    const [a, b] = FRAMES[S.frameStyle] || FRAMES.candy, n = Math.max(8, Math.round(16 * m0()));
+    const c = document.createElement('canvas'); c.width = c.height = n * 2;
+    const g = c.getContext('2d');
+    g.fillStyle = b; g.fillRect(0, 0, n * 2, n * 2); g.fillStyle = a;
+    for (let i = -2; i < 4; i++){ g.beginPath(); g.moveTo(i * n, 0); g.lineTo(i * n + n, 0); g.lineTo(i * n + n * 3, n * 2); g.lineTo(i * n + n * 2, n * 2); g.closePath(); g.fill(); }
+    return cx.createPattern(c, 'repeat');
+  }
+  function roundRect(x, y, w2, h2, r){
+    cx.beginPath(); cx.moveTo(x + r, y); cx.arcTo(x + w2, y, x + w2, y + h2, r); cx.arcTo(x + w2, y + h2, x, y + h2, r);
+    cx.arcTo(x, y + h2, x, y, r); cx.arcTo(x, y, x + w2, y, r); cx.closePath();
+  }
+  function rrPoint(x, y, w2, h2, r, d){
+    const sx = w2 - 2 * r, sy = h2 - 2 * r, q = Math.PI * r / 2, P = 2 * (sx + sy) + 4 * q;
+    d = ((d % P) + P) % P;
+    const arc = (c0, c1, an) => [c0 + Math.cos(an) * r, c1 + Math.sin(an) * r];
+    const segs = [[sx, u => [x + r + u, y]], [q, u => arc(x + w2 - r, y + r, -Math.PI / 2 + u / r)],
+                  [sy, u => [x + w2, y + r + u]], [q, u => arc(x + w2 - r, y + h2 - r, u / r)],
+                  [sx, u => [x + w2 - r - u, y + h2]], [q, u => arc(x + r, y + h2 - r, Math.PI / 2 + u / r)],
+                  [sy, u => [x, y + h2 - r - u]], [q, u => arc(x + r, y + r, Math.PI + u / r)]];
+    for (const [len, f] of segs){ if (d <= len) return f(d); d -= len; }
+    return [x + r, y];
+  }
+  function lightTrails(rect, t, laps, count, lw, frac){
+    const [x, y, w2, h2, r] = rect, P = 2 * (w2 - 2 * r + h2 - 2 * r) + 2 * Math.PI * r;
+    const tail = P * frac, N = Math.ceil(tail / (lw * 0.2));
+    cx.save(); cx.globalCompositeOperation = 'lighter';
+    for (let c = 0; c < count; c++){
+      const head = (t / L) * P * laps + c * P / count;
+      cx.fillStyle = '#fff3c4';
+      for (let i = N; i >= 0; i--){
+        const kk = i / N, [px, py] = rrPoint(x, y, w2, h2, r, head - kk * tail);
+        cx.globalAlpha = (1 - kk) * (1 - kk) * 0.2;
+        cx.beginPath(); cx.arc(px, py, lw * (0.7 - 0.4 * kk), 0, TAU); cx.fill();
+      }
+      const [hx, hy] = rrPoint(x, y, w2, h2, r, head), R = lw * 3.4;
+      const gr = cx.createRadialGradient(hx, hy, 0, hx, hy, R);
+      gr.addColorStop(0, 'rgba(255,248,220,.95)'); gr.addColorStop(0.35, 'rgba(255,230,160,.35)'); gr.addColorStop(1, 'rgba(255,230,160,0)');
+      cx.globalAlpha = 1; cx.fillStyle = gr; cx.fillRect(hx - R, hy - R, R * 2, R * 2);
+    }
+    cx.restore();
+  }
+  function snowCap(x, y, w2, lw){
+    const n = Math.max(8, Math.round(w2 / (lw * 1.55))), blobs = [];
+    for (let i = 0; i <= n; i++){
+      const u = i / n, r = lw * (1.1 + 0.7 * hash(i, 3)) * (i % 3 === 1 ? 1.25 : 1);
+      blobs.push([x + u * w2, y - lw * 0.15 + (hash(i, 7) - 0.5) * lw * 0.3, r]);
+    }
+    for (const [bx, by, r] of blobs){ cx.fillStyle = INK; cx.beginPath(); cx.arc(bx, by, r + lw * 0.32, 0, TAU); cx.fill(); }
+    for (const [bx, by, r] of blobs){ cx.fillStyle = '#fffaf4'; cx.beginPath(); cx.arc(bx, by, r, 0, TAU); cx.fill(); }
+    cx.fillStyle = 'rgba(242,155,180,.35)';
+    for (const [bx, by, r] of blobs){ cx.beginPath(); cx.arc(bx, by + r * 0.35, r * 0.6, 0, Math.PI); cx.fill(); }
+  }
+  function camRect(){
+    const ar = ASPECT[S.camAspect] || 16 / 9;
+    let fw = W * S.camSize / 100 * (scene.vertical ? 1.9 : 1), fh = fw / ar;
+    if (fw > W * 0.92){ fw = W * 0.92; fh = fw / ar; }
+    if (fh > H * 0.9){ fh = H * 0.9; fw = fh * ar; }
+    const edge = S.frameDeco ? Math.min(fw, fh) * 0.12 : 0;
+    const x = Math.max(fw / 2 + 10, Math.min(W - fw / 2 - 10, W * pos.camX / 100)) - fw / 2;
+    const y = Math.max(fh / 2 + edge * 1.8, Math.min(H - fh / 2 - 10, H * pos.camY / 100)) - fh / 2;
+    return [x, y, fw, fh];
+  }
+  function drawCam(t){
+    const [x, y, fw, fh] = camRect(), lw = 10 * m0(), r = 20 * m0();
+    cx.save(); cx.lineJoin = 'round';
+    cx.strokeStyle = INK; cx.lineWidth = lw + 4 * m0(); roundRect(x, y, fw, fh, r); cx.stroke();
+    cx.strokeStyle = stripe; cx.lineWidth = lw; roundRect(x, y, fw, fh, r); cx.stroke();
+    cx.restore();
+    lightTrails([x, y, fw, fh, r], t, 2, 2, lw * 0.7, 0.12);
+    if (S.frameDeco){
+      snowCap(x + r * 0.5, y, fw - r, lw);
+      if (ok('gift')){                                             // a little stack of presents on the top-right corner
+        const gg = GEO.gift, g1 = Math.min(fw, fh) * 0.28, g2 = g1 * 0.74, g3 = g1 * 0.6, ar = gg.h / gg.w;
+        for (const [gx, gs, rot, ph, base] of [[x + fw - g1 * 1.05, g1, -0.04, 0, y + lw * 0.3], [x + fw - g1 * 1.05 - g2 * 0.95, g2, 0.06, 1.4, y + lw * 0.3],
+                                              [x + fw - g1 * 1.05 + (g1 - g3) / 2, g3, 0.1, 2.6, y + lw * 0.3 - g1 * ar * 0.9]]){
+          const gh = gs * ar;
+          cx.save(); cx.translate(gx + gs / 2, base); cx.rotate(rot + Math.sin(w(3) * t + ph) * 0.02);
+          cx.drawImage(IMG.gift, -gs / 2, -gh, gs, gh); cx.restore();
+        }
+      }
+    }
+    if (S.sparkles) sparklesIn({ x, y, w: fw, h: fh * 0.2 }, t, 2, 21);
+  }
+
+  // ---------- alerts ----------
+  const queue = [];
+  let active = null, evCount = 0, frozen = null;
+  const clock = () => frozen !== null ? frozen : performance.now() / 1000;
+  const back = p => { const c = 1.7; return 1 + (c + 1) * Math.pow(p - 1, 3) + c * Math.pow(p - 1, 2); };
+  function fire(ev){
+    if (!ev || !ev.kind) return;
+    queue.push(Object.assign({ name: 'Someone', amount: 0, message: '', reward: '' }, ev, { n: evCount++ }));
+    if (!active) next();
+  }
+  function next(){ const ev = queue.shift(); active = ev ? { ev, t0: clock() } : null; }
+  function fill(tpl, ev){
+    const amt = ev.kind === 'tip' ? S.currency + (Math.round(+ev.amount * 100) / 100) : String(ev.amount || '');
+    return String(tpl || '').replace(/\{name\}/g, ev.name).replace(/\{amount\}/g, amt).replace(/\{reward\}/g, ev.reward || '');
+  }
+  const KIND = { follow: ['lblFollow', 'lineFollow'], sub: ['lblSub', 'lineSub'], gift: ['lblGift', 'lineGift'], tip: ['lblTip', 'lineTip'],
+                 cheer: ['lblCheer', 'lineCheer'], raid: ['lblRaid', 'lineRaid'], points: ['lblPoints', 'linePoints'] };
+  function fitFont(text, weight, size, maxW){
+    let fs = size;
+    do { cx.font = `${weight} ${fs}px Fredoka, 'Segoe UI', sans-serif`; if (cx.measureText(text).width <= maxW) break; fs -= 2; } while (fs > 14);
+    return fs;
+  }
+  function wrapLines(text, maxW, maxLines){
+    const words = String(text).split(/\s+/), lines = [];
+    let cur = '';
+    for (const wd of words){
+      const t2 = cur ? cur + ' ' + wd : wd;
+      if (cx.measureText(t2).width > maxW && cur){ lines.push(cur); cur = wd; } else cur = t2;
+      if (lines.length === maxLines) break;
+    }
+    if (cur && lines.length < maxLines) lines.push(cur);
+    return lines;
+  }
+  // card: chubby cream cloud-card with a folded ribbon banner across the top (the concept's mint "NEW SUB" banner)
+  function drawCard(ev, cxp, bottom, a, sc){
+    const [lk, nk] = KIND[ev.kind] || KIND.follow, u = m0();
+    const label = String(S[lk] || '').toUpperCase(), line = fill(S[nk], ev), msg = S.showMsg ? String(ev.message || '').trim() : '';
+    const maxW = Math.min(W * 0.6, 820 * u), padX = 50 * u;
+    const nameFs = fitFont(ev.name, 700, 68 * u, maxW - padX * 2), lineFs = fitFont(line, 600, 32 * u, maxW - padX * 2);
+    cx.font = `500 ${25 * u}px Fredoka, sans-serif`;
+    const msgLines = msg ? wrapLines('“' + msg + '”', maxW - padX * 2, 2) : [];
+    cx.font = `700 ${nameFs}px Fredoka, sans-serif`; let tw = cx.measureText(ev.name).width;
+    cx.font = `600 ${lineFs}px Fredoka, sans-serif`; tw = Math.max(tw, cx.measureText(line).width);
+    cx.font = `500 ${25 * u}px Fredoka, sans-serif`; for (const l of msgLines) tw = Math.max(tw, cx.measureText(l).width);
+    const cw = Math.max(420 * u, Math.min(maxW, tw + padX * 2));
+    const ch = 70 * u + nameFs * 1.1 + lineFs * 1.3 + (msgLines.length ? msgLines.length * 32 * u + 10 * u : 0) + 34 * u;
+    let x = cxp - cw / 2, y = bottom - ch;
+    x = Math.max(16 * u, Math.min(W - cw - 16 * u, x)); y = Math.max(60 * u, y);
+    const bc = BANNER[S.frameStyle] || BANNER.candy;
+    cx.save(); cx.globalAlpha = a;
+    cx.translate(x + cw / 2, y + ch); cx.scale(sc, sc); cx.translate(-(x + cw / 2), -(y + ch));
+    const r = 34 * u, lw = 6 * u;
+    cx.fillStyle = 'rgba(74,36,24,.25)'; roundRect(x + 5 * u, y + 11 * u, cw, ch, r); cx.fill();
+    cx.fillStyle = CREAM; roundRect(x, y, cw, ch, r); cx.fill();
+    cx.strokeStyle = INK; cx.lineWidth = lw; roundRect(x, y, cw, ch, r); cx.stroke();
+    // little hearts & stars sprinkled inside, like the concept card
+    for (const [hx, hy, c] of [[x + 30 * u, y + 40 * u, '#f3c85a'], [x + cw - 30 * u, y + 40 * u, '#f29bb4'], [x + 30 * u, y + ch - 30 * u, '#f29bb4'], [x + cw - 30 * u, y + ch - 30 * u, '#f3c85a']])
+      sparkle(hx, hy, 11 * u, 0.9, c);                            // a sparkle in each corner
+    // ribbon banner: a centre band with folded tails, wider than the label
+    cx.font = `700 ${30 * u}px Fredoka, sans-serif`;
+    const bw = Math.min(cw * 0.86, cx.measureText(label).width + 90 * u), bh = 56 * u, bx = x + cw / 2 - bw / 2, by = y - bh * 0.55;
+    cx.fillStyle = bc; cx.strokeStyle = INK; cx.lineWidth = 5 * u; cx.lineJoin = 'round';
+    for (const s of [-1, 1]){                                      // tails
+      const tx = s < 0 ? bx - 30 * u : bx + bw + 30 * u, ex = s < 0 ? bx + 14 * u : bx + bw - 14 * u;
+      cx.beginPath(); cx.moveTo(ex, by + 14 * u); cx.lineTo(tx, by + 14 * u); cx.lineTo(tx + s * -14 * u, by + bh * 0.5 + 14 * u);
+      cx.lineTo(tx, by + bh + 14 * u); cx.lineTo(ex, by + bh + 14 * u); cx.closePath();
+      cx.globalAlpha = a; cx.fill(); cx.stroke();
+    }
+    roundRect(bx, by, bw, bh, 14 * u); cx.fill(); cx.stroke();
+    cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.lineWidth = 7 * u; cx.strokeStyle = INK;
+    cx.strokeText(label, x + cw / 2, by + bh / 2 + 2 * u); cx.fillStyle = '#fff'; cx.fillText(label, x + cw / 2, by + bh / 2 + 2 * u);
+    let ty = y + 46 * u + nameFs * 0.55;
+    cx.font = `700 ${nameFs}px Fredoka, sans-serif`; cx.lineWidth = 8 * u; cx.strokeStyle = '#fff';
+    cx.strokeText(ev.name, x + cw / 2, ty); cx.fillStyle = '#e0566a'; cx.fillText(ev.name, x + cw / 2, ty);
+    ty += nameFs * 0.55 + lineFs * 0.8;
+    cx.fillStyle = INK; cx.font = `600 ${lineFs}px Fredoka, sans-serif`; cx.fillText(line, x + cw / 2, ty);
+    ty += lineFs * 0.5 + 24 * u;
+    cx.fillStyle = '#8a6252'; cx.font = `500 ${25 * u}px Fredoka, sans-serif`;
+    for (const l of msgLines){ cx.fillText(l, x + cw / 2, ty); ty += 32 * u; }
+    cx.restore();
+  }
+  function drawAlert(now){
+    if (!active) return false;
+    const ev = active.ev, p = now - active.t0, hold = Math.max(2, S.cardTime), FLY = 2.4, DROP = 1.1;
+    const span = teamSpan(), u = m0(), gx = W * pos.dropX / 100, gy = H * pos.dropY / 100;
+    // the team gallops across; the present drops when the sleigh passes above the landing spot
+    const x0 = -span * 0.6, x1 = W + span, xAt = q => x0 + (x1 - x0) * q;
+    const sleighOff = scene.deerH * GEO.deer.w / GEO.deer.h * 0.5 + scene.sleighH * GEO.sleigh.w / GEO.sleigh.h * 0.62;
+    const qDrop = Math.min(0.85, Math.max(0.15, (gx + sleighOff - x0) / (x1 - x0))), pDrop = qDrop * FLY;
+    const tLand = pDrop + DROP, cardOn = tLand + 0.35, END = cardOn + hold + 0.7;
+    if (p >= END){ next(); return false; }
+    if (p < FLY){
+      const q = p / FLY;
+      drawTeam(xAt(q), scene.flyY + Math.sin(q * Math.PI) * -H * 0.03, now, true, 1);
+    }
+    const gg = GEO.gift, gs = 150 * u, gh = gs * gg.h / gg.w, cg = GEO.chute, cs = gs * 1.5, chh = cs * cg.h / cg.w;
+    const startX = xAt(qDrop) - sleighOff, startY = scene.flyY + scene.sleighH * 0.3;
+    let bx, by, chuteA = 0, chuteX = 0, chuteY = 0, rot = 0;
+    if (p >= pDrop){
+      const q = Math.min(1, (p - pDrop) / DROP), e = 1 - Math.pow(1 - q, 2);
+      bx = startX + (gx - startX) * e + Math.sin(q * Math.PI * 3) * 26 * u * (1 - q);
+      by = startY + (gy - startY) * q;
+      rot = Math.sin(q * Math.PI * 3) * 0.12 * (1 - q);
+      if (p > tLand){ const b = p - tLand; by = gy - Math.abs(Math.sin(Math.min(1, b / 0.35) * Math.PI)) * 30 * u * (b < 0.35 ? 1 : 0); rot = 0; }
+      // parachute: holds the gift while falling, then detaches and drifts up and away
+      const rel = Math.max(0, p - tLand);
+      chuteA = Math.max(0, 1 - rel / 1.2);
+      chuteX = bx + rel * 140 * u; chuteY = by - gh * 0.55 - rel * 260 * u;
+      const outQ = Math.max(0, (p - (END - 0.7)) / 0.7), a = 1 - outQ;
+      if (chuteA > 0 && ok('chute')){
+        cx.save(); cx.globalAlpha = chuteA * a; cx.translate(chuteX, chuteY); cx.rotate(rot * 0.6 + rel * 0.6);
+        cx.drawImage(IMG.chute, -cg.hook[0] / cg.w * cs, -cg.hook[1] / cg.h * chh, cs, chh); cx.restore();
+      }
+      if (ok('gift')){ cx.save(); cx.globalAlpha = a; cx.translate(bx, by); cx.rotate(rot); cx.scale(1 - outQ * 0.3, 1 - outQ * 0.3); cx.drawImage(IMG.gift, -gs / 2, -gh / 2, gs, gh); cx.restore(); }
+      // landing puff + confetti
+      if (p > tLand && p < tLand + 2.4){
+        const q2 = p - tLand;
+        for (let i = 0; i < 40; i++){
+          const ang = -Math.PI / 2 + (hash(i, ev.n) - 0.5) * 2.4, v = (380 + hash(ev.n, i) * 520) * u;
+          const px = bx + Math.cos(ang) * v * q2, py = by - gh * 0.3 + Math.sin(ang) * v * q2 + 900 * u * q2 * q2;
+          cx.save(); cx.globalAlpha = Math.max(0, 1 - q2 / 2.2) * a; cx.translate(px, py); cx.rotate(q2 * 6 + i);
+          cx.fillStyle = CONF[i % CONF.length];
+          if (i % 3) cx.fillRect(-7 * u, -4 * u, 14 * u, 8 * u); else { cx.beginPath(); cx.arc(0, 0, 6 * u, 0, TAU); cx.fill(); }
+          cx.restore();
+        }
+      }
+      if (p > cardOn){
+        const q = Math.min(1, (p - cardOn) / 0.45);
+        drawCard(ev, bx, by - gh * 0.62, a * Math.min(1, q * 1.5), back(q) * (1 - outQ * 0.3));
+      }
+    }
+    return p < FLY;                                                // true while the alert team is in the sky
+  }
+
+  window.__setTime = s => { frozen = s; };
+  window.__ready = () => loaded === names.length && !!scene && fontsOk;
+  window.__draw = s => draw(s);
+  window.__fire = ev => fire(ev);
+  function frame(){ draw(clock()); requestAnimationFrame(frame); }
+
+  function draw(abs){
+    const t = ((abs * spd) % L + L) % L;
+    cx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    cx.clearRect(0, 0, W, H);
+    if (S.room && ok(scene.vertical ? 'room_v' : 'room_h')){
+      const im = IMG[scene.vertical ? 'room_v' : 'room_h'], k = Math.max(W / im.naturalWidth, H / im.naturalHeight);
+      cx.drawImage(im, (W - im.naturalWidth * k) / 2, (H - im.naturalHeight * k) / 2, im.naturalWidth * k, im.naturalHeight * k);
+      if (S.cam){ const [fx, fy, fw, fh] = camRect(); cx.save(); cx.globalCompositeOperation = 'destination-out'; roundRect(fx, fy, fw, fh, 20 * m0()); cx.fill(); cx.restore(); }
+    }
+    if (S.moon && ok('moon')) drawMoon(t);
+    if (S.amount > 0) drawSnow(t);
+    if (S.cam) drawCam(t);
+    if (S.hill && ok('hill') && ok('sign')) drawHill(t);
+    const alertFlying = drawAlert(abs);
+    if (S.flyby && !active && ok('deer') && ok('sleigh')) idleFlyby(t);
+    void alertFlying;
+  }
+  window.addEventListener('resize', () => { if (loaded === names.length) build(); });
+  return { fire };
+}
+window.SleighExpress = { start, DEF };
+})();
+
+(function(){
+  var Q = new URLSearchParams(location.search), cfg = {};
+  Q.forEach(function(v, k){ cfg[k] = v === 'true' ? true : v === 'false' ? false : v; });
+  if (Q.get('bg')) document.body.style.background = '#' + Q.get('bg').replace('#', '');
+  SleighExpress.start(cfg, 'sx-h6t2rm/', window.SE_GEO);
+})();
+</script></body></html>
