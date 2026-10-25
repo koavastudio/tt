@@ -126,11 +126,30 @@ function start(userCfg, base, GEO){
     cx.globalAlpha = 0.95;
     const r = 26 * m0();
     roundRect(inset, inset, W - inset * 2, H - inset * 2, r); cx.stroke();
-    // shimmer: a light dash running round the border, one lap per loop
-    cx.strokeStyle = 'rgba(255,255,255,.75)'; cx.lineWidth = lw * 0.45;
-    const per = 2 * (W + H), dash = per * 0.06;
-    cx.setLineDash([dash, per - dash]); cx.lineDashOffset = -(t / L) * per;
-    roundRect(inset, inset, W - inset * 2, H - inset * 2, r); cx.stroke();
+    cx.restore();
+    // neon lights running round the border, one lap per loop
+    neonRun(() => roundRect(inset, inset, W - inset * 2, H - inset * 2, r), 2 * (W + H), t, 1, 4, lw, 0.07);
+  }
+  // neon colour of the ribbon: same hue, full saturation, bright
+  function neon(hex){
+    const n = parseInt(hex.slice(1), 16), r = (n >> 16) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    let h = 0;
+    if (d) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return d < 0.08 ? 'hsl(45,100%,70%)' : `hsl(${Math.round(h * 60 + 360) % 360},100%,62%)`;   // near-grey ribbons glow warm gold
+  }
+  // `count` glowing dashes travel along a closed path; `laps` whole laps per loop keeps the loop seamless
+  function neonRun(path, per, t, laps, count, lw, frac){
+    const col = neon(S.ribbonColor), dash = per * frac, gap = per / count - dash, off = -(t / L) * per * laps;
+    cx.save();
+    cx.lineJoin = 'round'; cx.lineCap = 'round';
+    cx.setLineDash([dash, gap]); cx.lineDashOffset = off;
+    cx.globalCompositeOperation = 'lighter';
+    cx.shadowColor = col; cx.shadowBlur = 38 * m0();
+    cx.strokeStyle = col; cx.globalAlpha = 0.75; cx.lineWidth = lw * 3.6; path(); cx.stroke();   // wide glow
+    cx.shadowBlur = 12 * m0();
+    cx.globalAlpha = 1; cx.lineWidth = lw * 1.5; path(); cx.stroke();                            // neon tube
+    cx.shadowBlur = 0; cx.strokeStyle = '#fffaf2'; cx.lineWidth = lw * 0.55; path(); cx.stroke(); // hot core
     cx.restore();
   }
   function roundRect(x, y, w2, h2, r){
@@ -153,11 +172,8 @@ function start(userCfg, base, GEO){
     roundRect(x, y, fw, fh, r); cx.stroke();
     cx.strokeStyle = 'rgba(255,255,255,.55)'; cx.lineWidth = lw * 0.3;           // thin highlight line inside the ribbon
     roundRect(x + lw * 0.9, y + lw * 0.9, fw - lw * 1.8, fh - lw * 1.8, r * 0.8); cx.stroke();
-    const per = 2 * (fw + fh), dash = per * 0.08;                                    // shimmer runs round the frame once per loop
-    cx.setLineDash([dash, per - dash]); cx.lineDashOffset = -(t / L) * per * 2;
-    cx.strokeStyle = 'rgba(255,255,255,.8)'; cx.lineWidth = lw * 0.45;
-    roundRect(x, y, fw, fh, r); cx.stroke();
     cx.restore();
+    neonRun(() => roundRect(x, y, fw, fh, r), 2 * (fw + fh), t, 2, 2, lw, 0.12);       // two neon lights, two laps per loop
     const cs = Math.min(fw, fh) * 0.42 * S.cornerSize / 100, out = cs * 0.16;      // bouquets sit slightly outside the corner
     const pieces = [
       { img: 'corner_top', px: x - out, py: y - out, flip: 1, ay: 0, ph: 0.7 },
