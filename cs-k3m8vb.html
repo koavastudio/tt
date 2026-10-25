@@ -3,7 +3,7 @@
 <meta name="robots" content="noindex,nofollow"><title>Cozy Santa Corner</title>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
 <style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}</style></head>
-<body><script>window.CS_GEO = {"santa":{"w":1213,"h":1121,"eyes":[[367.6719160104987,366.09448818897636,15.5],[574.5,386.12335958005247,16.0]],"skin":"#fdd5b0","shoulder":[134.78,538.0]},"arm":{"w":529,"h":1135,"pivot":[279.5,1021.5]},"gifts":{"w":1095,"h":1088},"mound":{"w":1479,"h":534},"box":{"w":1146,"h":746},"lid":{"w":1186,"h":655},"fcorner":{"w":1006,"h":1051},"fbow":{"w":1196,"h":986},"ext":"webp"};
+<body><script>window.CS_GEO = {"santa":{"w":1213,"h":1121,"eyes":[[367.6719160104987,366.09448818897636,15.5],[574.5,386.12335958005247,16.0]],"skin":"#fdd5b0","shoulder":[134.78,538.0]},"arm":{"w":529,"h":1135,"pivot":[279.5,1021.5],"sleeve":441.0},"bellarm":{"w":487,"h":1192,"pivot":[214.5,1072.8],"sleeve":322.0,"bell":[312.66795704951915,74.52]},"gifts":{"w":1095,"h":1088},"mound":{"w":1479,"h":534},"box":{"w":1146,"h":746},"lid":{"w":1186,"h":655},"fcorner":{"w":1006,"h":1051},"fbow":{"w":1196,"h":986},"ext":"webp"};
 /* Cozy Santa Corner — animated kawaii Santa decoration + StreamElements alert widget. Forked from Poinsettia Wreath.
    const api = CozySanta.start(cfg, assetBase, geo)   ->  api.fire({ kind, name, amount, message, reward })
    Decoration (always, also on the plain OBS / TikTok link): Santa paper-doll rig (body + waving arm behind the beard +
@@ -40,7 +40,7 @@ function start(userCfg, base, GEO){
   const cx = cv.getContext('2d');
   let W = 0, H = 0, DPR = 1, scene = null, flakes = [], stripe = null, pos = {};
 
-  const IMG = {}, names = ['santa','arm','gifts','mound','box','lid','fcorner','fbow'].concat(S.room ? ['room_h','room_v'] : []);
+  const IMG = {}, names = ['santa','arm','bellarm','gifts','mound','box','lid','fcorner','fbow'].concat(S.room ? ['room_h','room_v'] : []);
   let loaded = 0, fontsOk = false;
   names.forEach(n => {
     const im = new Image();
@@ -121,11 +121,44 @@ function start(userCfg, base, GEO){
   }
 
   // ---------- Santa rig ----------
-  function waveAngle(t, fast){
-    if (fast) return -0.25 + Math.sin(fast * TAU * 2.6) * 0.38;     // excited waving during an alert
-    const p = ((t / L) * 2) % 1;                                   // two calm waving bursts per loop
-    const burst = p < 0.3 ? Math.sin(p / 0.3 * Math.PI * 3) * 0.32 * Math.sin(p / 0.3 * Math.PI) : 0;
-    return -0.18 + burst + Math.sin(w(4) * t) * 0.04;
+  // arm pose: 0 = resting down beside the body, 1 = raised; it swings out sideways and up and comes back down.
+  // First half of the loop: a wave. Second half: the bell arm rings a golden hand bell. Alerts ring the bell, excitedly.
+  const ARM_REST = -2.72, ARM_UP = -0.22;
+  const smooth = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
+  function armPose(t, react){
+    let lift = 0, swing = 0, bell = false, ring = 0;
+    if (react && react.p < 3.2){
+      const p = react.p;
+      bell = true; lift = smooth(p / 0.35) * (1 - smooth((p - 2.7) / 0.5));
+      ring = 1; swing = Math.sin(p * TAU * 6.5) * 0.16;            // quick jingle shakes
+    } else {
+      const half = (t / L) * 2, bt = (half % 1) * (L / 2);          // seconds into this half of the loop
+      bell = Math.floor(half) % 2 === 1;
+      lift = smooth(bt / 0.6) * (1 - smooth((bt - 3.0) / 0.6));
+      const on = bt > 0.6 && bt < 3.0, q = (bt - 0.6) / 2.4;
+      if (bell){ ring = on ? Math.sin(q * Math.PI) : 0; swing = on ? Math.sin((bt - 0.6) * TAU * 5) * 0.13 * ring : 0; }
+      else swing = on ? Math.sin(q * Math.PI * 3) * 0.3 * Math.sin(q * Math.PI) : 0;
+    }
+    return { angle: ARM_REST + (ARM_UP - ARM_REST) * lift + swing * lift + Math.sin(w(4) * t) * 0.03, bell, ring: ring * lift };
+  }
+  // little music notes rising from the bell (world coords, drawn after Santa)
+  function drawNotes(bx, by, t, ring, salt){
+    if (ring <= 0.05) return;
+    const u = m0();
+    for (let i = 0; i < 4; i++){
+      const ph = ((t * 0.9 + i * 0.25 + salt) % 1), al = Math.sin(ph * Math.PI) * ring;
+      const x = bx + (i % 2 ? 1 : -1) * (14 + ph * 46) * u + Math.sin(ph * 6 + i) * 8 * u, y = by - (10 + ph * 120) * u;
+      cx.save(); cx.globalAlpha = al; cx.translate(x, y); cx.rotate((i % 2 ? 0.25 : -0.2));
+      cx.font = `700 ${(44 + (i % 2) * 10) * u}px Fredoka, 'Segoe UI Symbol', sans-serif`; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+      cx.lineWidth = 8 * u; cx.strokeStyle = INK; cx.lineJoin = 'round';
+      const ch = i % 2 ? '♪' : '♫';
+      cx.strokeText(ch, 0, 0); cx.fillStyle = ['#f3c85a', '#f29bb4', '#7ccfa8', '#fff6ec'][i]; cx.fillText(ch, 0, 0);
+      cx.restore();
+    }
+    for (let i = 0; i < 3; i++){
+      const ph = ((t * 1.3 + i * 0.33) % 1);
+      sparkle(bx + (hash(i, Math.floor(t * 1.3)) - 0.5) * 70 * u, by - ph * 50 * u, (10 + i * 4) * u, Math.sin(ph * Math.PI) * ring);
+    }
   }
   function blinkAmount(t){
     let best = 0;                                                  // three blinks per loop, ~0.18 s each
@@ -137,11 +170,11 @@ function start(userCfg, base, GEO){
   }
   function drawSanta(t, react){
     const s = scene.santa, g = GEO.santa, k = s.w / g.w;
-    let lift = 0, tilt = 0, fast = 0, happy = false;
+    let lift = 0, tilt = 0, happy = false;
     if (react){                                                    // react = { kind, p (seconds into the alert) }
       const p = react.p, hops = react.kind === 'raid' ? 3 : (react.kind === 'sub' || react.kind === 'gift' || react.kind === 'tip' || react.kind === 'cheer') ? 2 : 0;
       if (p < 2.4){
-        happy = true; fast = p + 0.01;
+        happy = true;
         if (hops && p < hops * 0.42) lift = Math.abs(Math.sin(p / 0.42 * Math.PI)) * s.h * 0.13;
         if (!hops) tilt = Math.sin(p * TAU * 1.3) * 0.05 * (1 - p / 2.4);
       }
@@ -151,11 +184,14 @@ function start(userCfg, base, GEO){
     cx.translate(s.flip > 0 ? s.x : s.x + s.w, s.y + bob - lift);
     cx.translate(s.flip * s.w / 2, s.h); cx.rotate(tilt * s.flip); cx.translate(-s.flip * s.w / 2, -s.h);
     cx.scale(s.flip * k, k);
+    let bellPt = null, ringAmt = 0;
     if (S.wave){                                                   // arm first: the body and the beard cover the shoulder
-      const a = GEO.arm, [px, py] = a.pivot, [shx, shy] = g.shoulder;
-      const as = g.h * 0.42 / a.h;                                 // arm length ~42 % of Santa's height
-      cx.save(); cx.translate(shx, shy); cx.rotate(waveAngle(t, fast)); cx.scale(as, as);
-      cx.drawImage(IMG.arm, -px, -py, a.w, a.h);
+      const pose = armPose(t, react), key = pose.bell && ok('bellarm') ? 'bellarm' : 'arm';
+      const a = GEO[key], [px, py] = a.pivot, [shx, shy] = g.shoulder;
+      const as = g.h * 0.42 / GEO.arm.h * GEO.arm.sleeve / a.sleeve;   // same sleeve thickness for both arm sprites
+      cx.save(); cx.translate(shx, shy); cx.rotate(pose.angle); cx.scale(as, as);
+      cx.drawImage(IMG[key], -px, -py, a.w, a.h);
+      if (key === 'bellarm'){ const m = cx.getTransform(), q = m.transformPoint(new DOMPoint(a.bell[0] - px, a.bell[1] - py)); bellPt = [q.x / DPR, q.y / DPR]; ringAmt = pose.ring; }
       cx.restore();
     }
     cx.drawImage(IMG.santa, 0, 0, g.w, g.h);                      // geometry units (the WebP is downscaled)
@@ -168,6 +204,7 @@ function start(userCfg, base, GEO){
       }
     }
     cx.restore();
+    if (bellPt) drawNotes(bellPt[0], bellPt[1], t, ringAmt, s.flip > 0 ? 0 : 0.5);
     if (S.sparkles) sparklesIn({ x: s.x, y: s.y - lift, w: s.w, h: s.h * 0.5 }, t, 3, 4);
   }
 
