@@ -72,17 +72,23 @@ function start(userCfg, base, GEO){
         items.push({ kind: 'star', ax, ay, len: charmH * (1.25 + rnd() * 1.3), /* always below the bulbs */ h: charmH * (0.42 + rnd() * 0.22), ph: rnd() * TAU, n: 1 + Math.floor(rnd() * 3), sw: i });
       }
     }
-    // ---- bottom strip: a thin sagging garland cord with small charms and tiny stars
+    // ---- bottom strip: the SAME pine garland, smaller and with more swags (a thin echo of the top one)
     // 9:16: the strip sits mid-screen by default, above TikTok's comment area
     const stripPct = vertical && S.stripY === DEF.stripY ? 46 : S.stripY;
-    const strip = [], sy = H * stripPct / 100, sag = H * 0.012, cnt = Math.max(8, Math.round(W / (vertical ? 120 : 130) / k));
-    for (let i = 0; i < cnt; i++){
-      const u = (i + 0.5) / cnt, x = u * W, y = sy + Math.sin(u * Math.PI * (vertical ? 3 : 5)) * sag;
-      strip.push(i % 2 === 0
-        ? { kind: 'charm', key: set[i / 2 % set.length | 0], ax: x, ay: y, len: charmH * 0.12, h: charmH * 0.42, ph: rnd() * TAU, n: 2 + (i % 3) }
-        : { kind: 'star', ax: x, ay: y, len: charmH * (0.2 + 0.5 * rnd()), h: charmH * 0.22, ph: rnd() * TAU, n: 1 + (i % 3) });
+    const nB = vertical ? 4 : 7, spanB = W / nB, kB = spanB / (sw.anchorR[0] - sw.anchorL[0]);
+    const yB = H * stripPct / 100 - sw.anchorL[1] * kB, cB = charmH * 0.5, swagsB = [], itemsB = [];
+    for (let i = 0; i < nB; i++){
+      const x0 = i * spanB;
+      swagsB.push({ x: x0 - sw.anchorL[0] * kB, y: yB, k: kB, px: x0 + spanB / 2, ph: i * 1.3, n: 2 + (i % 2) });
+      const at = u => { const pts = sw.line, p = pts[Math.round(u * (pts.length - 1))]; return [x0 - sw.anchorL[0] * kB + p[0] * kB, yB + p[1] * kB + sw.thick * kB * 0.3]; };
+      const [cxp, cyp] = at(0.5);
+      itemsB.push({ kind: 'charm', key: set[i % set.length], ax: cxp, ay: cyp, len: cB * 0.12, h: cB, ph: rnd() * TAU, n: 2 + (i % 3), sw: i });
+      if (S.stars) for (const u of [0.2, 0.8]){
+        const [ax, ay] = at(u);
+        itemsB.push({ kind: 'star', ax, ay, len: cB * (0.5 + rnd() * 0.9), h: cB * 0.45, ph: rnd() * TAU, n: 1 + Math.floor(rnd() * 3), sw: i });
+      }
     }
-    scene = { vertical, swags, items, strip, sy, sag, charmH };
+    scene = { vertical, rows: [{ swags, items, bow: 0.55 }, { swags: swagsB, items: itemsB, bow: 0.5 }], charmH };
     initSnow();
   }
 
@@ -147,49 +153,33 @@ function start(userCfg, base, GEO){
     cx.restore();
   }
 
-  function drawTop(t){
+  function drawRow(row, t, bowH){
     const sw = GEO.swag;
     // strings and charms hang BEHIND the garland greenery, so draw them first
-    for (const it of scene.items){
-      const s = scene.swags[it.sw], a = Math.sin(w(s.n) * t + s.ph) * 0.01;
+    for (const it of row.items){
+      const s = row.swags[it.sw], a = Math.sin(w(s.n) * t + s.ph) * 0.01;
       cx.save(); cx.translate(s.px, s.y + sw.anchorL[1] * s.k); cx.rotate(a); cx.translate(-s.px, -(s.y + sw.anchorL[1] * s.k));
       drawItem(it, t, 0); cx.restore();
     }
-    for (const s of scene.swags){
-      const a = Math.sin(w(s.n) * t + s.ph) * 0.01, ay = s.y + sw.anchorL[1] * s.k;
+    for (const s of row.swags){
+      const a = Math.sin(w(s.n) * t + s.ph) * 0.01, ay = s.y + sw.anchorL[1] * s.k, sz = s.k / row.swags[0].k;
       cx.save(); cx.translate(s.px, ay); cx.rotate(a); cx.translate(-s.px, -ay);
       cx.drawImage(IMG.swag, s.x, s.y, sw.w * s.k, sw.h * s.k);
-      // fairy lights twinkling along the swag line
-      const pts = sw.line;
-      for (let i = 0; i < 18; i++){
-        const p = pts[Math.round((i + 0.5) / 18 * (pts.length - 1))], x = s.x + p[0] * s.k, y = s.y + (p[1] - sw.thick * 0.18) * s.k;
-        const on = 0.5 + 0.5 * Math.sin(w(3 + (i % 3)) * t + i * 1.3);
-        glowAt(x, y, 14 * m0(), '#ffe2a0', on * 0.9 * S.glow / 100);
-        cx.fillStyle = `rgba(255,248,225,${0.5 + 0.5 * on})`; cx.beginPath(); cx.arc(x, y, 2.6 * m0(), 0, TAU); cx.fill();
+      // fairy lights twinkling along the swag line (fewer and smaller on a small swag)
+      const pts = sw.line, nl = Math.max(8, Math.round(18 * Math.min(1, s.k / 0.4)));
+      for (let i = 0; i < nl; i++){
+        const p = pts[Math.round((i + 0.5) / nl * (pts.length - 1))], x = s.x + p[0] * s.k, y = s.y + (p[1] - sw.thick * 0.18) * s.k;
+        const on = 0.5 + 0.5 * Math.sin(w(3 + (i % 3)) * t + i * 1.3), r = Math.max(1.6, 2.6 * m0() * Math.min(1, s.k * 2.2));
+        glowAt(x, y, r * 5.5, '#ffe2a0', on * 0.9 * S.glow / 100);
+        cx.fillStyle = `rgba(255,248,225,${0.5 + 0.5 * on})`; cx.beginPath(); cx.arc(x, y, r, 0, TAU); cx.fill();
       }
       cx.restore();
     }
-    if (S.bows && ok('bow')) for (let i = 1; i < scene.swags.length; i++){
-      const g = GEO.bow, s = scene.swags[i], bh = scene.charmH * 0.55, bw = bh * g.w / g.h;
+    if (S.bows && ok('bow')) for (let i = 1; i < row.swags.length; i++){
+      const g = GEO.bow, s = row.swags[i], bh = bowH, bw = bh * g.w / g.h;
       const x = s.x + sw.anchorL[0] * s.k, y = s.y + sw.anchorL[1] * s.k;
       cx.save(); cx.translate(x, y); cx.rotate(Math.sin(w(3) * t + i) * 0.04); cx.drawImage(IMG.bow, -bw / 2, -bh * 0.4, bw, bh); cx.restore();
     }
-  }
-  function drawStrip(t){
-    // cord: a soft pine-green rope with a darker outline, sagging between the charms
-    const y0 = scene.sy, sag = scene.sag, u = m0();
-    const path = () => { cx.beginPath(); for (let i = 0; i <= 80; i++){ const q = i / 80, x = q * W, y = y0 + Math.sin(q * Math.PI * (scene.vertical ? 3 : 5)) * sag; i ? cx.lineTo(x, y) : cx.moveTo(x, y); } };
-    cx.save(); cx.lineCap = 'round';
-    cx.strokeStyle = '#2c4a2a'; cx.lineWidth = 9 * u; path(); cx.stroke();
-    cx.strokeStyle = '#5f9c5a'; cx.lineWidth = 5 * u; path(); cx.stroke();
-    cx.restore();
-    for (let i = 0; i < 40; i++){
-      const q = (i + 0.5) / 40, x = q * W, y = y0 + Math.sin(q * Math.PI * (scene.vertical ? 3 : 5)) * sag - 3 * u;
-      const on = 0.5 + 0.5 * Math.sin(w(2 + (i % 4)) * t + i * 0.9);
-      glowAt(x, y, 10 * u, '#ffe2a0', on * 0.8 * S.glow / 100);
-      cx.fillStyle = `rgba(255,248,225,${0.45 + 0.55 * on})`; cx.beginPath(); cx.arc(x, y, 2 * u, 0, TAU); cx.fill();
-    }
-    for (const it of scene.strip){ if (it.kind === 'star' && !S.stars) continue; drawItem(it, t, 0); }
   }
 
   let frozen = null;
@@ -202,8 +192,9 @@ function start(userCfg, base, GEO){
     cx.setTransform(DPR, 0, 0, DPR, 0, 0);
     cx.clearRect(0, 0, W, H);
     if (S.amount > 0) drawSnow(t);
-    if (S.bottom) drawStrip(t);
-    if (S.top && ok('swag')) drawTop(t);
+    if (!ok('swag')) return;
+    if (S.bottom) drawRow(scene.rows[1], t, scene.charmH * 0.32);
+    if (S.top) drawRow(scene.rows[0], t, scene.charmH * 0.55);
   }
   window.addEventListener('resize', () => { if (loaded === names.length) build(); });
 }
