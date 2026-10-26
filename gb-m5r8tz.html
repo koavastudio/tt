@@ -15,6 +15,7 @@
 const TAU = Math.PI * 2;
 const DEF = { layout:'auto', top:true, bottom:true, stars:true, bows:true, swags:0, stripY:78, size:100, glow:100,
               charms:'all', amount:1, speed:100, loop:24 };
+const DANGLE = ['star'];                       // what hangs on the beaded strings (cycled)
 const SETS = {"all": ["round", "cane", "starc", "mint", "house", "heart", "man"], "cookies": ["round", "starc", "house", "heart", "man"], "candy": ["cane", "mint", "heart", "cane", "mint"]};
 
 function start(userCfg, base, GEO){
@@ -69,7 +70,7 @@ function start(userCfg, base, GEO){
       }
       if (S.stars) for (const u of [0.1, 0.36, 0.64, 0.9]){
         const [ax, ay] = at(u);
-        items.push({ kind: 'star', ax, ay, len: charmH * (1.25 + rnd() * 1.3), /* always below the bulbs */ h: charmH * (0.42 + rnd() * 0.22), ph: rnd() * TAU, n: 1 + Math.floor(rnd() * 3), sw: i });
+        items.push({ kind: 'star', key: DANGLE[items.length % DANGLE.length], ax, ay, len: charmH * (1.25 + rnd() * 1.3), /* always below the bulbs */ h: charmH * (0.42 + rnd() * 0.22), ph: rnd() * TAU, n: 1 + Math.floor(rnd() * 3), sw: i });
       }
     }
     // ---- bottom strip: the SAME pine garland, smaller and with more swags (a thin echo of the top one)
@@ -85,7 +86,7 @@ function start(userCfg, base, GEO){
       itemsB.push({ kind: 'charm', key: set[i % set.length], ax: cxp, ay: cyp, len: cB * 0.12, h: cB, ph: rnd() * TAU, n: 2 + (i % 3), sw: i });
       if (S.stars) for (const u of [0.2, 0.8]){
         const [ax, ay] = at(u);
-        itemsB.push({ kind: 'star', ax, ay, len: cB * (0.5 + rnd() * 0.9), h: cB * 0.45, ph: rnd() * TAU, n: 1 + Math.floor(rnd() * 3), sw: i });
+        itemsB.push({ kind: 'star', key: DANGLE[itemsB.length % DANGLE.length], ax, ay, len: cB * (0.5 + rnd() * 0.9), h: cB * 0.45, ph: rnd() * TAU, n: 1 + Math.floor(rnd() * 3), sw: i });
       }
     }
     scene = { vertical, rows: [{ swags, items, bow: 0.55 }, { swags: swagsB, items: itemsB, bow: 0.5 }], charmH };
@@ -119,7 +120,7 @@ function start(userCfg, base, GEO){
 
   // ---------- one hanging item: string + charm/star, pendulum sway + glow pulse ----------
   function drawItem(it, t, swing){
-    const key = it.kind === 'star' ? 'star' : it.key, g = GEO[key];
+    const key = it.kind === 'star' ? (it.key || 'star') : it.key, g = GEO[key];
     if (!ok(key)) return;
     const ang = Math.sin(w(it.n) * t + it.ph) * (it.kind === 'star' ? 0.09 : 0.055) + (swing || 0);
     const hh = it.h, ww = hh * g.w / g.h;
