@@ -70,7 +70,7 @@ function start(userCfg, base, GEO){
       }
       if (S.stars) for (const u of [0.1, 0.36, 0.64, 0.9]){
         const [ax, ay] = at(u);
-        items.push({ kind: 'star', key: DANGLE[items.length % DANGLE.length], ax, ay, len: charmH * (1.25 + rnd() * 1.3), /* always below the bulbs */ h: charmH * (0.42 + rnd() * 0.22), ph: rnd() * TAU, n: 1 + Math.floor(rnd() * 3), sw: i });
+        items.push({ kind: 'star', key: DANGLE[items.length % DANGLE.length], ax, ay, len: charmH * (1.25 + rnd() * 1.3), /* always below the charms */ h: charmH * (0.42 + rnd() * 0.22), ph: rnd() * TAU, n: 1 + Math.floor(rnd() * 3), sw: i });
       }
     }
     // ---- bottom strip: the SAME garland, smaller and with more swags (a thin echo of the top one)
@@ -125,7 +125,7 @@ function start(userCfg, base, GEO){
     const ang = Math.sin(w(it.n) * t + it.ph) * (it.kind === 'star' ? 0.09 : 0.055) + (swing || 0);
     const hh = it.h, ww = hh * g.w / g.h;
     cx.save(); cx.translate(it.ax, it.ay); cx.rotate(ang);
-    // string: beads for stars, a thin wire for bulbs
+    // string: beads for stars, a thin thread for charms
     if (it.kind === 'star'){
       const n = Math.max(2, Math.round(it.len / (9 * m0())));
       for (let i = 1; i <= n; i++){
@@ -166,7 +166,7 @@ function start(userCfg, base, GEO){
       const a = Math.sin(w(s.n) * t + s.ph) * 0.01, ay = s.y + sw.anchorL[1] * s.k, sz = s.k / row.swags[0].k;
       cx.save(); cx.translate(s.px, ay); cx.rotate(a); cx.translate(-s.px, -ay);
       cx.drawImage(IMG.swag, s.x, s.y, sw.w * s.k, sw.h * s.k);
-      // fairy lights twinkling along the swag line (fewer and smaller on a small swag)
+      // tiny glowing dots along the swag line (fewer and smaller on a small swag)
       const pts = sw.line, nl = Math.max(8, Math.round(18 * Math.min(1, s.k / 0.4)));
       for (let i = 0; i < nl; i++){
         const p = pts[Math.round((i + 0.5) / nl * (pts.length - 1))], x = s.x + p[0] * s.k, y = s.y + (p[1] - sw.thick * 0.18) * s.k;
