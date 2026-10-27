@@ -102,7 +102,7 @@ function start(userCfg, base, GEO){
   // layer: motion fall|rise|drift|static|shoot · shape dot|sparkle|sprinkle|petal|coin|bubble|pearl|pixel|wisp|mallow|leaf
   //        colors[] · n (count at amount 1 on 1920x1080) · size [min,max] px · speed (max loops per cycle) · wobble px
   //        glow alpha · solid (full opacity) · core (white-hot centre) · twinkle (extra cycles) · spin · flip · fade (rise: fade-out rate) · front (over the garland)
-  const FX = [{"motion": "drift", "shape": "dot", "colors": ["#e6ff8a", "#fff2a0", "#c8f57a"], "n": 44, "size": [2.4, 4], "wobble": 22, "glow": 1.4, "glowR": 6, "twinkle": 1, "core": true}];
+  const FX = [{"motion": "drift", "shape": "dot", "colors": ["#e6ff8a", "#fff2a0", "#c8f57a"], "n": 44, "size": [3, 4.8], "wobble": 22, "glow": 1.6, "glowR": 6, "core": true, "solid": true}];
   let parts = [];
   function initFx(){
     const mul = [0, 1, 2.2, 4][Math.max(0, Math.min(3, S.amount | 0))] * (W * H) / (1920 * 1080);
