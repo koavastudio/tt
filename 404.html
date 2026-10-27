@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KOAVA download</title>
+<script>
+// Big video downloads moved from /tt/<id>/downloads/<file> to the GitHub Release dl-<id>; keep old README links working.
+(function () {
+  var m = location.pathname.match(/\/tt\/([a-z0-9-]+)\/downloads\/([^\/?#]+)$/i);
+  if (m) location.replace('https://github.com/koavastudio/tt/releases/download/dl-' + m[1] + '/' + m[2]);
+})();
+</script>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#1e1712;color:#f6e9dc;font:16px/1.5 system-ui,sans-serif;text-align:center;padding:16px}</style>
+</head>
+<body>
+<div><h1>KOAVA</h1><p>This page was not found. If you were downloading a video, it should start in a moment.</p></div>
+</body>
+</html>
