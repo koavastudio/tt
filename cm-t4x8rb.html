@@ -101,7 +101,7 @@ function start(userCfg, base, GEO){
   // ---------- particles: product-specific FX layers (replaces the old snow) ----------
   // layer: motion fall|rise|drift|static|shoot · shape dot|sparkle|sprinkle|petal|coin|bubble|pearl|pixel|wisp|mallow|leaf
   //        colors[] · n (count at amount 1 on 1920x1080) · size [min,max] px · speed (max loops per cycle) · wobble px
-  //        glow alpha · twinkle (extra cycles) · spin · flip · fade (rise: fade-out rate) · front (over the garland)
+  //        glow alpha · core (white-hot centre) · twinkle (extra cycles) · spin · flip · fade (rise: fade-out rate) · front (over the garland)
   const FX = [{"motion": "rise", "shape": "wisp", "colors": ["#fff4e6"], "n": 14, "size": [22, 46], "speed": 1.2, "wobble": 22, "fade": 1.2, "grow": 1.2}, {"motion": "rise", "shape": "mallow", "colors": ["#fffaf2", "#ffd9e2"], "n": 16, "size": [7, 12], "speed": 1.6, "wobble": 16, "fade": 0.5, "spin": true}];
   let parts = [];
   function initFx(){
@@ -183,7 +183,7 @@ function start(userCfg, base, GEO){
         const f = ((t / L) * p.m + p.off) % 1;
         y = F.motion === 'fall' ? f * (H + 60) - 30 : H + 30 - f * (H + 60);
         x = p.x0 + Math.sin(w(p.wn) * t + p.wp) * p.wd;
-        if (F.motion === 'rise'){ al *= Math.min(1, f * 6) * Math.max(0, 1 - f * (F.fade || 0)); if (F.grow) r *= 1 + f * F.grow; }
+        if (F.motion === 'rise'){ al *= Math.min(1, f * 6) * Math.max(0, 1 - Math.pow(f, 1.5) * (F.fade || 0)); if (F.grow) r *= 1 + f * F.grow; }
       } else if (F.motion === 'drift'){
         x = p.x0 + Math.sin(w(p.dn) * t + p.wp) * p.wd * 4; y = p.y0 + Math.sin(w(p.dn2) * t + p.wp * 1.7) * p.wd * 2.5;
       }
@@ -192,6 +192,7 @@ function start(userCfg, base, GEO){
       const ang = F.spin ? w(p.sn) * t + p.wp : 0, sx = F.flip ? Math.max(0.08, Math.abs(Math.cos(w(p.wn) * t + p.wp))) : 1;
       if (F.glow) glowAt(x, y, r * (F.glowR || 4), p.col, al * F.glow * S.glow / 100);
       shapeAt(p, x, y, r, ang, sx, al);
+      if (F.core){ cx.globalAlpha = al; cx.fillStyle = '#fff6e0'; cx.beginPath(); cx.arc(x, y, r * 0.45, 0, TAU); cx.fill(); cx.globalAlpha = 1; }
     }
   }
   function glowAt(x, y, r, col, a){
