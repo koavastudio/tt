@@ -8,12 +8,12 @@
    Top: garland swags with glowing charms hanging from them and beaded strings with glowing danglers at different
    lengths. Bottom: a smaller copy of the same garland with small charms and danglers. Everything sways, glows and
    twinkles on a seamless loop (all motion is a periodic function of time, period `loop`).
-   cfg: layout h|v|auto · top/bottom/stars/bows bool · swags (0 auto) · stripY % of height · size % · glow % ·
+   cfg: layout h|v|auto · top/bottom/stars/bows bool · swags/swagsB (0 auto) · width/widthB % · align/alignB left|center|right · stripY % of height · size % · glow % ·
         charms (a SETS key) · amount 0..3 (snow) · speed % · loop s.
    window.__setTime(s) / __draw(s) freeze the clock for frame capture. */
 (function(){
 const TAU = Math.PI * 2;
-const DEF = { layout:'auto', top:true, bottom:true, stars:true, bows:true, swags:0, stripY:78, size:100, glow:100,
+const DEF = { layout:'auto', top:true, bottom:true, stars:true, bows:true, swags:0, width:100, align:'center', swagsB:0, widthB:100, alignB:'center', stripY:78, size:100, glow:100,
               charms:'all', amount:1, speed:100, loop:24 };
 const DANGLE = ['star'];                       // what hangs on the beaded strings (cycled)
 const SETS = {"all": ["round", "cane", "starc", "mint", "house", "heart", "man"], "cookies": ["round", "starc", "house", "heart", "man"], "candy": ["cane", "mint", "heart", "cane", "mint"]};
@@ -21,7 +21,7 @@ const SETS = {"all": ["round", "cane", "starc", "mint", "house", "heart", "man"]
 function start(userCfg, base, GEO){
   const S = Object.assign({}, DEF);
   for (const k in userCfg) if (userCfg[k] !== undefined && userCfg[k] !== '' && userCfg[k] !== null) S[k] = userCfg[k];
-  ['swags','stripY','size','glow','amount','speed','loop'].forEach(k => S[k] = +S[k]);
+  ['swags','width','swagsB','widthB','stripY','size','glow','amount','speed','loop'].forEach(k => S[k] = +S[k]);
   ['top','bottom','stars','bows'].forEach(k => S[k] = S[k] === true || S[k] === 'true' || S[k] === 1 || S[k] === '1');
   if (!S.loop) S.loop = 24;
   const L = S.loop, spd = (S.speed || 100) / 100, set = SETS[S.charms] || SETS.all;
@@ -56,12 +56,14 @@ function start(userCfg, base, GEO){
     const vertical = S.layout === 'v' || (S.layout === 'auto' && H > W);
     const k = S.size / 100, sw = GEO.swag;
     // ---- top garland: swags across the full width, charms on each swag, star strings between them
-    const nSw = S.swags > 0 ? Math.round(S.swags) : (vertical ? 2 : 3), span = W / nSw;
+    // width % + position: the garland can cover part of the screen; auto repeat keeps the swag size when it's narrower
+    const TW = W * Math.max(10, Math.min(100, S.width || 100)) / 100, LX = S.align === 'left' ? 0 : S.align === 'right' ? W - TW : (W - TW) / 2;
+    const nSw = S.swags > 0 ? Math.round(S.swags) : Math.max(1, Math.round((vertical ? 2 : 3) * TW / W)), span = TW / nSw;
     const sk = span / (sw.anchorR[0] - sw.anchorL[0]), topY = -sw.anchorL[1] * sk + 8 * m0();
     const charmH = Math.min(span * 0.26, H * (vertical ? 0.075 : 0.13)) * k, items = [], swags = [];
     let ci = 0;
     for (let i = 0; i < nSw; i++){
-      const x0 = i * span;
+      const x0 = LX + i * span;
       swags.push({ x: x0 - sw.anchorL[0] * sk, y: topY, k: sk, px: x0 + span / 2, ph: i * 1.7, n: 2 + (i % 2) });
       const at = u => { const pts = sw.line, p = pts[Math.round(u * (pts.length - 1))]; return [x0 - sw.anchorL[0] * sk + p[0] * sk, topY + p[1] * sk + sw.thick * sk * 0.3]; };
       for (const u of [0.22, 0.5, 0.78]){
@@ -76,10 +78,11 @@ function start(userCfg, base, GEO){
     // ---- bottom strip: the SAME garland, smaller and with more swags (a thin echo of the top one)
     // 9:16: the strip sits mid-screen by default, above TikTok's comment area
     const stripPct = vertical && S.stripY === DEF.stripY ? 46 : S.stripY;
-    const nB = vertical ? 4 : 7, spanB = W / nB, kB = spanB / (sw.anchorR[0] - sw.anchorL[0]);
-    const yB = H * stripPct / 100 - sw.anchorL[1] * kB, cB = charmH * 0.5, swagsB = [], itemsB = [];
+    const BW = W * Math.max(10, Math.min(100, S.widthB || 100)) / 100, LB = S.alignB === 'left' ? 0 : S.alignB === 'right' ? W - BW : (W - BW) / 2;
+    const nB = S.swagsB > 0 ? Math.round(S.swagsB) : Math.max(1, Math.round((vertical ? 4 : 7) * BW / W)), spanB = BW / nB, kB = spanB / (sw.anchorR[0] - sw.anchorL[0]);
+    const yB = H * stripPct / 100 - sw.anchorL[1] * kB, cB = Math.min(charmH * 0.5, spanB * 0.26 * k), swagsB = [], itemsB = [];
     for (let i = 0; i < nB; i++){
-      const x0 = i * spanB;
+      const x0 = LB + i * spanB;
       swagsB.push({ x: x0 - sw.anchorL[0] * kB, y: yB, k: kB, px: x0 + spanB / 2, ph: i * 1.3, n: 2 + (i % 2) });
       const at = u => { const pts = sw.line, p = pts[Math.round(u * (pts.length - 1))]; return [x0 - sw.anchorL[0] * kB + p[0] * kB, yB + p[1] * kB + sw.thick * kB * 0.3]; };
       const [cxp, cyp] = at(0.5);
@@ -89,7 +92,7 @@ function start(userCfg, base, GEO){
         itemsB.push({ kind: 'star', key: DANGLE[itemsB.length % DANGLE.length], ax, ay, len: cB * (0.5 + rnd() * 0.9), h: cB * 0.45, ph: rnd() * TAU, n: 1 + Math.floor(rnd() * 3), sw: i });
       }
     }
-    scene = { vertical, rows: [{ swags, items, bow: 0.55 }, { swags: swagsB, items: itemsB, bow: 0.5 }], charmH };
+    scene = { vertical, rows: [{ swags, items, bow: 0.55, ends: TW < W - 1 }, { swags: swagsB, items: itemsB, bow: 0.5, ends: BW < W - 1 }], charmH };
     initSnow();
   }
 
@@ -176,9 +179,11 @@ function start(userCfg, base, GEO){
       }
       cx.restore();
     }
-    if (S.bows && ok('bow')) for (let i = 1; i < row.swags.length; i++){
-      const g = GEO.bow, s = row.swags[i], bh = bowH, bw = bh * g.w / g.h;
-      const x = s.x + sw.anchorL[0] * s.k, y = s.y + sw.anchorL[1] * s.k;
+    // bows where swags meet; a garland narrower than the screen also gets one at each free end
+    const ties = row.swags.map(s => [s.x + sw.anchorL[0] * s.k, s.y + sw.anchorL[1] * s.k]);
+    if (row.ends){ const e = row.swags[row.swags.length - 1]; ties.push([e.x + sw.anchorR[0] * e.k, e.y + sw.anchorR[1] * e.k]); }
+    if (S.bows && ok('bow')) for (let i = row.ends ? 0 : 1; i < ties.length; i++){
+      const g = GEO.bow, bh = bowH, bw = bh * g.w / g.h, x = ties[i][0], y = ties[i][1];
       cx.save(); cx.translate(x, y); cx.rotate(Math.sin(w(3) * t + i) * 0.04); cx.drawImage(IMG.bow, -bw / 2, -bh * 0.4, bw, bh); cx.restore();
     }
   }
